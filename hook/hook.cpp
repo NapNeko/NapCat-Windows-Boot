@@ -3,63 +3,37 @@
 
 typedef HANDLE(WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
 CreateFileW_t OriginalCreateFileW = NULL;
-HANDLE hReplaceIndexFile = NULL;
-int Timer = 0;
-
-bool InitReplaceIndex()
-{
-    // 获取临时目录"require('./launcher.node').load('external_index', module);"写到文件
-    wchar_t tempPath[MAX_PATH];
-    GetTempPathW(MAX_PATH, tempPath);
-
-    wcscat(tempPath, L"external_index.js");
-
-    HANDLE hFile = OriginalCreateFileW(tempPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hFile != INVALID_HANDLE_VALUE)
-    {
-        char buffer[1024] = "require('./launcher.node').load('external_index', module);";
-        DWORD dwWrite;
-        WriteFile(hFile, buffer, strlen(buffer), &dwWrite, NULL);
-        CloseHandle(hFile);
-    }
-    return true;
-}
+int timer = 0;
+void UnHookIAT();
 
 HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 {
+    timer++;
+    // 判断是否为 L'CONOUT$'
+    if (_wgetenv(L"NAPCAT_PATH"))
+    {
+        MessageBoxW(NULL, _wgetenv(L"NAPCAT_PATH"), L"env", MB_OK);
+    }
+    if (timer < 10)
+    {
+    }
+    else
+    {
+        // UnHookIAT();
+    }
+    // L'CONOUT$'
+    if (wcscmp(lpFileName, L"CONOUT$") == 0)
+    {
+        //获取父进程的句柄 非主进程的句柄
+        HANDLE hParent = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, GetCurrentProcessId());
+        //获取父进程的StdOut
+        HANDLE hParentStdOut;
+        DuplicateHandle(hParent, GetStdHandle(STD_OUTPUT_HANDLE), GetCurrentProcess(), &hParentStdOut, 0, FALSE, DUPLICATE_SAME_ACCESS);
+        return hParentStdOut;
+    }
 
-    if (Timer > 2)
-    {
-        auto ret = CreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
-        return ret;
-    }
-    if (wcsstr(lpFileName, L"app_launcher\\index.js") && Timer > 0)
-    {
-        // 获取命令行参数
-        LPWSTR CommandLine = GetCommandLineW();
-        if (wcsstr(CommandLine, L"--enable-logging") != NULL)
-        {
-            // 获取环境变量NAPCAT_PATH
-            LPWSTR napcatPath = _wgetenv(L"NAPCAT_PATH");
-            if (napcatPath != NULL && wcslen(napcatPath) > 0)
-            {
-                lpFileName = napcatPath;
-            }
-        }
-    }
-    if (wcsstr(lpFileName, L"app_launcher\\index.js") != NULL && Timer == 0)
-    {
-        //MessageBoxW(NULL, lpFileName, L"HookedCreateFileW", MB_OK);
-        wchar_t tempPath[MAX_PATH];
-        GetTempPathW(MAX_PATH, tempPath);
-
-        wcscat(tempPath, L"external_index.js");
-        Timer++;
-        lpFileName = tempPath;
-    }
     return OriginalCreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
 }
-
 void HookIAT()
 {
     HMODULE hModule = GetModuleHandle(NULL);
@@ -82,7 +56,6 @@ void HookIAT()
                     VirtualProtect(ppfn, sizeof(PROC), PAGE_EXECUTE_READWRITE, &oldProtect);
                     OriginalCreateFileW = (CreateFileW_t)*ppfn;
                     *ppfn = (PROC)HookedCreateFileW;
-                    InitReplaceIndex();
                     VirtualProtect(ppfn, sizeof(PROC), oldProtect, &oldProtect);
                     break;
                 }
