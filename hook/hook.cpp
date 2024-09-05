@@ -8,30 +8,27 @@ void UnHookIAT();
 
 HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 {
-    timer++;
     // 判断是否为 L'CONOUT$'
-    if (_wgetenv(L"NAPCAT_PATH"))
+    if (_wgetenv(L"NAPCAT_PATCH_PATH") && timer == 0 && wcsstr(lpFileName, L"app_launcher\\index.js") != NULL)
     {
-        MessageBoxW(NULL, _wgetenv(L"NAPCAT_PATH"), L"env", MB_OK);
+        timer++;
+        lpFileName = _wgetenv(L"NAPCAT_PATCH_PATH");
+        // 替换验证文件
+        return OriginalCreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
     }
-    if (timer < 10)
+    if (_wgetenv(L"NAPCAT_LOAD_PATH") && timer > 0 && wcsstr(lpFileName, L"app_launcher\\index.js") != NULL)
     {
+        timer++;
+        lpFileName = _wgetenv(L"NAPCAT_LOAD_PATH");
+        // 替换实际运行文件
+        return OriginalCreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
     }
-    else
-    {
-        // UnHookIAT();
-    }
-    // L'CONOUT$'
-    if (wcscmp(lpFileName, L"CONOUT$") == 0)
-    {
-        //获取父进程的句柄 非主进程的句柄
-        HANDLE hParent = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, GetCurrentProcessId());
-        //获取父进程的StdOut
-        HANDLE hParentStdOut;
-        DuplicateHandle(hParent, GetStdHandle(STD_OUTPUT_HANDLE), GetCurrentProcess(), &hParentStdOut, 0, FALSE, DUPLICATE_SAME_ACCESS);
-        return hParentStdOut;
-    }
-
+    // if (timer > 2)
+    //{
+    // MessageBoxW(NULL, L"HookedCreateFileW", L"HookedCreateFileW", MB_OK);
+    // 欢迎IAT释放
+    // UnHookIAT();
+    //}
     return OriginalCreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
 }
 void HookIAT()

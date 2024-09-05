@@ -2,13 +2,18 @@
 #include <iostream>
 
 // 快速创建命令
-std::string createBootCommand(std::string processName)
+std::string createBootCommand(std::string processName, std::string qucikLogin)
 {
     const char *processNameInternal = processName.c_str();
     const char *commandLine = "--enable-logging";
-    char *processName2 = new char[strlen(processNameInternal) + strlen(commandLine) + 1];
-    strcpy(processName2, processNameInternal);
-    std::string realProcessName = processName2;
+    std::string realProcessName = processNameInternal;
+    realProcessName += " ";
+    realProcessName += commandLine;
+    if (qucikLogin.length() > 0)
+    {
+        realProcessName += " -q";
+        realProcessName += qucikLogin;
+    }
     return realProcessName;
 }
 // 创建进程
@@ -18,10 +23,14 @@ void CreateSuspendedProcess(const char *processName, const char *dllPath)
     PROCESS_INFORMATION pi;
     ZeroMemory(&pi, sizeof(PROCESS_INFORMATION));
     ZeroMemory(&si, sizeof(STARTUPINFOA));
-    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    // 修改标准输出流
+    si.dwFlags = STARTF_USESTDHANDLES;
+    // si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
     si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-    // 创建并挂起进程
+    // si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+    //  创建并挂起进程
     auto *env = GetEnvironmentStrings();
+    // 获取命令行环境的环境变量
     if (!CreateProcessA(NULL, (LPSTR)processName, NULL, NULL, FALSE, CREATE_SUSPENDED, (LPVOID)env, NULL, &si, &pi))
     {
         std::cerr << "Failed to start process." << std::endl;
@@ -43,25 +52,64 @@ void CreateSuspendedProcess(const char *processName, const char *dllPath)
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
     system("pause");
+    // 判断进程是否残留
+    if (WaitForSingleObject(pi.hProcess, 0) == WAIT_TIMEOUT)
+    {
+        TerminateProcess(pi.hProcess, 0);
+    }
+}
+bool IsUserAnAdmin()
+{
+    BOOL fIsRunAsAdmin = FALSE;
+    DWORD dwError = ERROR_SUCCESS;
+    PSID pAdministratorsGroup = NULL;
+    SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
+    if (!AllocateAndInitializeSid(&NtAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &pAdministratorsGroup))
+    {
+        dwError = GetLastError();
+    }
+    else
+    {
+        if (!CheckTokenMembership(NULL, pAdministratorsGroup, &fIsRunAsAdmin))
+        {
+            dwError = GetLastError();
+        }
+        FreeSid(pAdministratorsGroup);
+    }
+    return fIsRunAsAdmin;
 }
 int main(int argc, char *argv[])
 {
-    // for (int i = 0; i < argc; i++)
-    // {
-    //     std::cout << "argv[" << i << "]:" << argv[i] << std::endl;
-    // }
-    // for (int i = 0; i < argc; i++)
-    // {
-    //     std::cout << argv[i] << " ";
-    // }
-    // std::cout << std::endl;
-    // if (argc < 2)
-    // {
-    //     std::cerr << "Usage: " << argv[0] << " <processName> <dllPath>" << std::endl;
-    //     system("pause");
-    //     return 1;
-    // }
-    std::string bootCommand = createBootCommand("D:\\AppD\\QQNT\\QQ.exe");
-    CreateSuspendedProcess(bootCommand.c_str(), "E:\\GitDev\\NapCat-Windows-Boot\\build\\hook\\Release\\NapCatWinBootHook.dll");
+    // 判断当前是否为管理员权限
+    if (!IsUserAnAdmin())
+    {
+        std::cerr << "Please run as administrator." << std::endl;
+        system("pause");
+        return 1;
+    }
+    system("chcp 65001");
+    for (int i = 0; i < argc; i++)
+    {
+        std::cout << "argv[" << i << "]:" << argv[i] << std::endl;
+    }
+    for (int i = 0; i < argc; i++)
+    {
+        std::cout << argv[i] << " ";
+    }
+    std::cout << std::endl;
+    if (argc < 3)
+    {
+        std::cerr << "Usage: " << argv[0] << " <processName> <dllPath> <quickLogin>" << std::endl;
+        system("pause");
+        return 1;
+    }
+    std::string quickLoginQQ = "";
+    if (argc == 4)
+    {
+        quickLoginQQ = argv[3];
+    }
+    std::string bootCommand = createBootCommand(argv[1], quickLoginQQ);
+    std::cout << "Boot Command:" << bootCommand << std::endl;
+    CreateSuspendedProcess(bootCommand.c_str(), argv[2]);
     return 0;
 }
