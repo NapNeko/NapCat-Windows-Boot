@@ -5,7 +5,6 @@ typedef HANDLE(WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUT
 CreateFileW_t OriginalCreateFileW = NULL;
 int timer = 0;
 void UnHookIAT();
-
 HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 {
     // 判断是否为 L'CONOUT$'
@@ -23,6 +22,10 @@ HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD
         // 替换实际运行文件
         return OriginalCreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
     }
+    // if (wcscmp(lpFileName, L"CONOUT$") == 0)
+    // {
+    //     return stdOutHandle;
+    // }
     // if (timer > 2)
     //{
     // MessageBoxW(NULL, L"HookedCreateFileW", L"HookedCreateFileW", MB_OK);

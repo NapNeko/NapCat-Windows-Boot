@@ -1,6 +1,8 @@
 #include <windows.h>
 #include <iostream>
-
+#include <csignal>
+#include <signal.h>
+HANDLE MainProcessHandle = NULL;
 // 快速创建命令
 std::string createBootCommand(std::string processName, std::string qucikLogin)
 {
@@ -11,7 +13,7 @@ std::string createBootCommand(std::string processName, std::string qucikLogin)
     realProcessName += commandLine;
     if (qucikLogin.length() > 0)
     {
-        realProcessName += " -q";
+        realProcessName += " -q ";
         realProcessName += qucikLogin;
     }
     return realProcessName;
@@ -25,18 +27,15 @@ void CreateSuspendedProcess(const char *processName, const char *dllPath)
     ZeroMemory(&si, sizeof(STARTUPINFOA));
     // 修改标准输出流
     si.dwFlags = STARTF_USESTDHANDLES;
-    // si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
     si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-    // si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
     //  创建并挂起进程
-    auto *env = GetEnvironmentStrings();
-    // 获取命令行环境的环境变量
-    if (!CreateProcessA(NULL, (LPSTR)processName, NULL, NULL, FALSE, CREATE_SUSPENDED, (LPVOID)env, NULL, &si, &pi))
+    if (!CreateProcessA(NULL, (LPSTR)processName, NULL, NULL, TRUE, CREATE_SUSPENDED, (LPVOID)NULL, NULL, &si, &pi))
     {
         std::cerr << "Failed to start process." << std::endl;
         return;
     }
-
+    MainProcessHandle = pi.hProcess;
+    std::cout << "[NapCat Backend] Main Process ID:" << pi.dwProcessId << std::endl;
     // 注入 DLL
     LPVOID pRemoteBuf = VirtualAllocEx(pi.hProcess, NULL, strlen(dllPath) + 1, MEM_COMMIT, PAGE_READWRITE);
     WriteProcessMemory(pi.hProcess, pRemoteBuf, (LPVOID)dllPath, strlen(dllPath) + 1, NULL);
@@ -78,6 +77,16 @@ bool IsUserAnAdmin()
     }
     return fIsRunAsAdmin;
 }
+void signalHandler(int signum)
+{
+    if (MainProcessHandle != NULL)
+    {
+        std::cout << "[NapCat Backend] Terminate Main Process." << std::endl;
+        TerminateProcess(MainProcessHandle, 0);
+    }
+    exit(signum);
+}
+
 int main(int argc, char *argv[])
 {
     // 判断当前是否为管理员权限
@@ -88,6 +97,8 @@ int main(int argc, char *argv[])
         return 1;
     }
     system("chcp 65001");
+    signal(SIGTERM, signalHandler);
+    signal(SIGINT, signalHandler);
     for (int i = 0; i < argc; i++)
     {
         std::cout << "argv[" << i << "]:" << argv[i] << std::endl;
