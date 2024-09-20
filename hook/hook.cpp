@@ -14,6 +14,14 @@ LPWSTR env_jump_patch_package = _wgetenv(L"LAUNCHER_JUMP_PACKAGE_PATCH");
 LPWSTR env_patch_package_once = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_ONCE");
 LPWSTR env_patch_package_main = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_MAIN");
 
+typedef HANDLE(WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+typedef FARPROC(WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
+
+GetProcAddress_t OriginalGetProcAddress = NULL;
+CreateFileW_t OriginalCreateFileW = NULL;
+
+void HookIATCreateFileW(HMODULE hModule);
+
 // 辅助函数 去除字符串中的所有空格
 std::string RemoveSpaces(const std::string &input)
 {
@@ -99,9 +107,6 @@ uint64_t SearchRangeAddressInModule(HMODULE module, const std::string &hexPatter
     return 0;
 }
 
-typedef FARPROC(WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
-
-GetProcAddress_t OriginalGetProcAddress = NULL;
 bool hookVeify(HMODULE hModule)
 {
     try
@@ -137,6 +142,7 @@ void initLauncher(HMODULE hModule)
             return;
         }
     }
+    HookIATCreateFileW(hModule);
 }
 
 FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
@@ -163,6 +169,20 @@ FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
     return OriginalGetProcAddress(hModule, lpProcName);
 }
 
+HANDLE WINAPI HookedCreateFileW(
+    LPCWSTR lpFileName,
+    DWORD dwDesiredAccess,
+    DWORD dwShareMode,
+    LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+    DWORD dwCreationDisposition,
+    DWORD dwFlagsAndAttributes,
+    HANDLE hTemplateFile)
+{
+    MessageBoxW(NULL, lpFileName, L"Hook", MB_OK);
+    std::wcout << L"Hooked CreateFileW: " << lpFileName << std::endl;
+    // 调用原始的 CreateFileW
+    return OriginalCreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+}
 void HookIATMainGetProcAddress()
 {
     HMODULE hModule = GetModuleHandle(NULL);
@@ -194,7 +214,36 @@ void HookIATMainGetProcAddress()
         pImportDesc++;
     }
 }
-
+void HookIATCreateFileW(HMODULE hModule)
+{
+    PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
+    PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)((BYTE *)hModule + pDosHeader->e_lfanew);
+    PIMAGE_IMPORT_DESCRIPTOR pImportDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE *)hModule + pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+    while (pImportDesc->Name)
+    {
+        LPCSTR pszModName = (LPCSTR)((BYTE *)hModule + pImportDesc->Name);
+        if (_stricmp(pszModName, "kernel32.dll") == 0)
+        {
+            PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((BYTE *)hModule + pImportDesc->FirstThunk);
+            while (pThunk->u1.Function)
+            {
+                PROC *ppfn = (PROC *)&pThunk->u1.Function;
+                if (*ppfn == (PROC)GetProcAddress(GetModuleHandleA("kernel32.dll"), "CreateFileW"))
+                {
+                    DWORD oldProtect;
+                    VirtualProtect(ppfn, sizeof(PROC), PAGE_EXECUTE_READWRITE, &oldProtect);
+                    OriginalCreateFileW = (CreateFileW_t)*ppfn;
+                    *ppfn = (PROC)HookedCreateFileW;
+                    VirtualProtect(ppfn, sizeof(PROC), oldProtect, &oldProtect);
+                    break;
+                }
+                pThunk++;
+            }
+            break;
+        }
+        pImportDesc++;
+    }
+}
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
     switch (ul_reason_for_call)
