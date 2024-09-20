@@ -13,6 +13,7 @@ LPWSTR env_jump_patch_veify = _wgetenv(L"LAUNCHER_JUMP_VEIFY_PATCH");
 LPWSTR env_jump_patch_package = _wgetenv(L"LAUNCHER_JUMP_PACKAGE_PATCH");
 LPWSTR env_patch_package_once = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_ONCE");
 LPWSTR env_patch_package_main = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_MAIN");
+bool patch_package_once = false;
 
 typedef HANDLE(WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
 typedef FARPROC(WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
@@ -137,12 +138,11 @@ void initLauncher(HMODULE hModule)
     if (env_jump_patch_veify = NULL)
     {
         bool patchVeify = hookVeify(hModule);
-        if (!patchVeify)
-        {
-            return;
-        }
     }
-    HookIATCreateFileW(hModule);
+    if (env_jump_patch_package = NULL)
+    {
+        HookIATCreateFileW(hModule);
+    }
 }
 
 FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
@@ -178,9 +178,28 @@ HANDLE WINAPI HookedCreateFileW(
     DWORD dwFlagsAndAttributes,
     HANDLE hTemplateFile)
 {
-    MessageBoxW(NULL, lpFileName, L"Hook", MB_OK);
-    std::wcout << L"Hooked CreateFileW: " << lpFileName << std::endl;
-    // 调用原始的 CreateFileW
+    if (env_jump_patch_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
+    {
+        lpFileName = env_jump_patch_package;
+    }
+    if (env_patch_package_main && wcsstr(lpFileName, env_patch_package_main) != NULL)
+    {
+
+        if (env_patch_package_once)
+        {
+            // 修补一次
+            if (!patch_package_once)
+            {
+                lpFileName = env_patch_package_main;
+                patch_package_once = true;
+            }
+        }
+        else
+        {
+            // 修补多次
+            lpFileName = env_patch_package_main;
+        }
+    }
     return OriginalCreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
 }
 void HookIATMainGetProcAddress()
