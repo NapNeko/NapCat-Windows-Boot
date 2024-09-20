@@ -31,6 +31,19 @@ void CreateSuspendedProcess(const char *processName, const char *dllPath)
     //  创建并挂起进程
     if (!CreateProcessA(NULL, (LPSTR)processName, NULL, NULL, TRUE, CREATE_SUSPENDED, (LPVOID)NULL, NULL, &si, &pi))
     {
+        //输出错误信息
+        DWORD error = GetLastError();
+        LPVOID errorMsg;
+        FormatMessage(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            error,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPSTR)&errorMsg,
+            0,
+            NULL);
+        std::cerr << "Error: " << (char*)errorMsg << std::endl;
+        LocalFree(errorMsg);
         std::cerr << "Failed to start process." << std::endl;
         return;
     }

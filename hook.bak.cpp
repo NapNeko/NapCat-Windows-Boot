@@ -205,21 +205,24 @@ HANDLE WINAPI MyCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwS
             isCONOUTTimer = true;
             std::string pattern = "E8 ?? ?? ?? ?? 84 C0 48 ?? ?? ?? ?? ?? ?? ?? ?? ?? 0F ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? F6 84 ?? ?? ?? ?? ?? ?? 74 ?? 48 8B ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ??";
             UINT64 address = SearchRangeAddressInModule(hModule, pattern);
-            // 调用hook函数
-            //  ptr转成str输出显示
-            address = address + 17;
-            // 设置内存可写
-            DWORD OldProtect = 0;
-            char buffer[100];
-            VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
-            // adress 赋值两个个字节 0x0F 0x84
-            // 输出该地址前两个字节
-            // PrintBuffer((void *)address, 2);
-            memcpy((LPVOID)address, jzCode, 2);
-            VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
+            if (address != 0)
+            {
+                // 调用hook函数
+                //  ptr转成str输出显示
+                address = address + 17;
+                // 设置内存可写
+                DWORD OldProtect = 0;
+                char buffer[100];
+                VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
+                // adress 赋值两个个字节 0x0F 0x84
+                // 输出该地址前两个字节
+                // PrintBuffer((void *)address, 2);
+                memcpy((LPVOID)address, jzCode, 2);
+                VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
 
-            // sprintf(buffer, "%p", address);
-            // MessageBoxA(NULL, buffer, "CreateFileW", MB_OK);
+                // sprintf(buffer, "%p", address);
+                // MessageBoxA(NULL, buffer, "CreateFileW", MB_OK);
+            }
         }
     }
     if (napcat_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
