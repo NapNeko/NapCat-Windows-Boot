@@ -10,10 +10,11 @@ BYTE HookCode[12] = {0x48, 0xB8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,
 BYTE jzCode[12] = {0x0F, 0x84};
 
 LPWSTR env_jump_patch_veify = _wgetenv(L"LAUNCHER_JUMP_VEIFY_PATCH");
-LPWSTR env_jump_patch_package = _wgetenv(L"LAUNCHER_JUMP_PACKAGE_PATCH");
+LPWSTR env_patch_package = _wgetenv(L"LAUNCHER_PACKAGE_PATCH");
 LPWSTR env_patch_package_once = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_ONCE");
-LPWSTR env_patch_package_main = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_MAIN");
-bool patch_package_once = false;
+LPWSTR env_patch_package_hack_main = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_HACK_MAIN");
+LPWSTR env_patch_package_real_main = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_REAL_MAIN");
+int patch_package_init_once = 0;
 
 typedef HANDLE(WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
 typedef FARPROC(WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
@@ -134,12 +135,11 @@ bool hookVeify(HMODULE hModule)
 }
 void initLauncher(HMODULE hModule)
 {
-    // 跳过验证
-    if (env_jump_patch_veify = NULL)
-    {
-        bool patchVeify = hookVeify(hModule);
-    }
-    if (env_jump_patch_package = NULL)
+
+    bool patchVeify = hookVeify(hModule);
+    std::cout << "patchVeify: " << patchVeify << std::endl;
+
+    if (env_patch_package != NULL)
     {
         HookIATCreateFileW(hModule);
     }
@@ -178,32 +178,30 @@ HANDLE WINAPI HookedCreateFileW(
     DWORD dwFlagsAndAttributes,
     HANDLE hTemplateFile)
 {
-    if (env_jump_patch_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
-    {
-        lpFileName = env_jump_patch_package;
-    }
-    if (env_patch_package_main && wcsstr(lpFileName, env_patch_package_main) != NULL)
+    //std::wcout << L"Hooked CreateFileW: " << lpFileName << std::endl;
+
+    if (env_patch_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
     {
 
-        if (env_patch_package_once)
+        if (patch_package_init_once < 5)
         {
-            // 修补一次
-            if (!patch_package_once)
-            {
-                lpFileName = env_patch_package_main;
-                patch_package_once = true;
-            }
+            lpFileName = env_patch_package;
         }
-        else
-        {
-            // 修补多次
-            lpFileName = env_patch_package_main;
-        }
+        patch_package_init_once++;
+    }
+    if (env_patch_package_hack_main && env_patch_package_real_main && wcsstr(lpFileName, env_patch_package_hack_main) != NULL)
+    {
+        lpFileName = env_patch_package_real_main;
     }
     return OriginalCreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
 }
 void HookIATMainGetProcAddress()
 {
+    //AllocConsole();
+    //freopen("CONOUT$", "w", stdout);
+    //std::wcout << env_patch_package_hack_main << std::endl;
+    //std::wcout << env_patch_package_real_main << std::endl;
+    //std::wcout << env_patch_package << std::endl;
     HMODULE hModule = GetModuleHandle(NULL);
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
     PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)((BYTE *)hModule + pDosHeader->e_lfanew);

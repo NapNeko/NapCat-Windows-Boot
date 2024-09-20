@@ -103,12 +103,12 @@ void signalHandler(int signum)
 int main(int argc, char *argv[])
 {
     // 判断当前是否为管理员权限
-    if (!IsUserAnAdmin())
-    {
-        std::cerr << "Please run as administrator." << std::endl;
-        system("pause");
-        return 1;
-    }
+    // if (!IsUserAnAdmin())
+    // {
+    //     std::cerr << "Please run as administrator." << std::endl;
+    //     system("pause");
+    //     return 1;
+    // }
     system("chcp 65001");
     signal(SIGTERM, signalHandler);
     signal(SIGINT, signalHandler);
