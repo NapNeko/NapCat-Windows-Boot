@@ -4,12 +4,16 @@
 #include <vector>
 #include <string>
 #include <Psapi.h>
-#include <mutex>
 
 #pragma comment(lib, "dbghelp.lib")
-BYTE OldCode[12] = {0x00};
 BYTE HookCode[12] = {0x48, 0xB8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xFF, 0xE0};
 BYTE jzCode[12] = {0x0F, 0x84};
+
+LPWSTR env_jump_patch_veify = _wgetenv(L"LAUNCHER_JUMP_VEIFY_PATCH");
+LPWSTR env_jump_patch_package = _wgetenv(L"LAUNCHER_JUMP_PACKAGE_PATCH");
+LPWSTR env_patch_package_once = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_ONCE");
+LPWSTR env_patch_package_main = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_MAIN");
+
 // 辅助函数 去除字符串中的所有空格
 std::string RemoveSpaces(const std::string &input)
 {
@@ -98,6 +102,42 @@ uint64_t SearchRangeAddressInModule(HMODULE module, const std::string &hexPatter
 typedef FARPROC(WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
 
 GetProcAddress_t OriginalGetProcAddress = NULL;
+bool hookVeify(HMODULE hModule)
+{
+    try
+    {
+        std::string pattern = "E8 ?? ?? ?? ?? 84 C0 48 ?? ?? ?? ?? ?? ?? ?? ?? ?? 0F ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? F6 84 ?? ?? ?? ?? ?? ?? 74 ?? 48 8B ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ??";
+        UINT64 address = SearchRangeAddressInModule(hModule, pattern);
+        // 调用hook函数
+        //  ptr转成str输出显示
+        address = address + 17;
+        // 设置内存可写
+        DWORD OldProtect = 0;
+        VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
+        // adress 赋值两个个字节 0x0F 0x84
+        // 输出该地址前两个字节
+        // PrintBuffer((void *)address, 2);
+        memcpy((LPVOID)address, jzCode, 2);
+        VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        return false;
+    }
+}
+void initLauncher(HMODULE hModule)
+{
+    // 跳过验证
+    if (env_jump_patch_veify = NULL)
+    {
+        bool patchVeify = hookVeify(hModule);
+        if (!patchVeify)
+        {
+            return;
+        }
+    }
+}
 
 FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 {
@@ -115,20 +155,7 @@ FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
     {
         if (hModule != NULL)
         {
-            std::cout << "[NTQQ] QQNT.dll QQMain Loading....." << std::endl;
-            std::string pattern = "E8 ?? ?? ?? ?? 84 C0 48 ?? ?? ?? ?? ?? ?? ?? ?? ?? 0F ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? F6 84 ?? ?? ?? ?? ?? ?? 74 ?? 48 8B ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ??";
-            UINT64 address = SearchRangeAddressInModule(hModule, pattern);
-            // 调用hook函数
-            //  ptr转成str输出显示
-            address = address + 17;
-            // 设置内存可写
-            DWORD OldProtect = 0;
-            VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
-            // adress 赋值两个个字节 0x0F 0x84
-            // 输出该地址前两个字节
-            // PrintBuffer((void *)address, 2);
-            memcpy((LPVOID)address, jzCode, 2);
-            VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
+            initLauncher(hModule);
         }
     }
 
@@ -136,7 +163,7 @@ FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
     return OriginalGetProcAddress(hModule, lpProcName);
 }
 
-void HookIAT()
+void HookIATMainGetProcAddress()
 {
     HMODULE hModule = GetModuleHandle(NULL);
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
@@ -173,7 +200,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
-        HookIAT();
+        HookIATMainGetProcAddress(); // 拦截QQNT.dll加载时机
         break;
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
