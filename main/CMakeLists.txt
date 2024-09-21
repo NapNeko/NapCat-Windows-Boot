@@ -13,4 +13,8 @@ if(MSVC)
 	add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 endif()
 file(GLOB SOURCES "*.cpp")
-add_executable (NapCatWinBootMain ${SOURCES} "NapCat.exe.manifest")
+#/MANIFESTUAC:"level='highestAvailable' uiAccess='true'"
+#add_executable (NapCatWinBootMain ${SOURCES})
+add_executable (NapCatWinBootMain WIN32 ${SOURCES})
+#设置Manifest
+set_target_properties(NapCatWinBootMain PROPERTIES LINK_FLAGS "/MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\"")
