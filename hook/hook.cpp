@@ -241,8 +241,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
-        AllocConsole();
-        freopen("CONOUT$", "w", stdout);
+        //AllocConsole();
+        //freopen("CONOUT$", "w", stdout);
         HookFunction64("Kernel32.dll", "CreateFileW", MyCreateFileW);
         break;
     case DLL_THREAD_ATTACH:

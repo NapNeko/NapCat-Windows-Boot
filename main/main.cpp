@@ -70,6 +70,61 @@ void CreateSuspendedProcess(std::wstring processName, std::wstring dllPath)
         TerminateProcess(pi.hProcess, 0);
     }
 }
+void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
+{
+    STARTUPINFOW si = {sizeof(si)};
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&pi, sizeof(PROCESS_INFORMATION));
+    ZeroMemory(&si, sizeof(STARTUPINFOW));
+    // 修改标准输出流
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+    // ACSPORT
+
+    std::wcout << L"Process Path: " << GetEnvironmentStringsW() << std::endl;
+    if (!CreateProcessW(NULL, (LPWSTR)processName, NULL, NULL, TRUE, CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, (LPVOID)NULL, NULL, &si, &pi))
+    {
+        // 输出错误信息
+        DWORD error = GetLastError();
+        LPVOID errorMsg;
+        FormatMessageW(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL,
+            error,
+            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPWSTR)&errorMsg,
+            0,
+            NULL);
+        // 输出错误代码和程序路径
+        std::wcerr << L"Error Code: " << error << std::endl;
+        std::wcerr << L"Process Path: " << processName << std::endl;
+        std::wcerr << L"Error: " << (wchar_t *)errorMsg << std::endl;
+        LocalFree(errorMsg);
+        std::wcerr << L"Failed to start process." << std::endl;
+        return;
+    }
+    MainProcessHandle = pi.hProcess;
+    std::wcout << L"[NapCat Backend] Main Process ID:" << pi.dwProcessId << std::endl;
+    // 注入 DLL
+    LPVOID pRemoteBuf = VirtualAllocEx(pi.hProcess, NULL, (wcslen(dllPath) + 1) * sizeof(wchar_t), MEM_COMMIT, PAGE_READWRITE);
+    WriteProcessMemory(pi.hProcess, pRemoteBuf, (LPVOID)dllPath, (wcslen(dllPath) + 1) * sizeof(wchar_t), NULL);
+
+    HANDLE hThread = CreateRemoteThread(pi.hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)LoadLibraryW, pRemoteBuf, 0, NULL);
+    WaitForSingleObject(hThread, INFINITE);
+    // 恢复进程
+    ResumeThread(pi.hThread);
+    // 等待进程结束
+    WaitForSingleObject(pi.hProcess, INFINITE);
+
+    // 关闭句柄
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    // 判断进程是否残留
+    if (WaitForSingleObject(pi.hProcess, 0) == WAIT_TIMEOUT)
+    {
+        TerminateProcess(pi.hProcess, 0);
+    }
+}
 bool IsUserAnAdmin()
 {
     BOOL fIsRunAsAdmin = FALSE;
@@ -125,7 +180,8 @@ int main(int argc, char *argv[])
     }
     for (int i = 0; i < argc; i++)
     {
-        std::cout << argv[i] << " ";
+        //std::cout << argv[i] << " ";
+        std::wcout << AnsiToUtf16(argv[i]) << std::endl;
     }
     std::cout << std::endl;
     if (argc < 3)
@@ -141,6 +197,6 @@ int main(int argc, char *argv[])
     }
     std::wstring bootCommand = createBootCommand(AnsiToUtf16(argv[1]), AnsiToUtf16(quickLoginQQ));
     std::wcout << L"Boot Command:" << bootCommand << std::endl;
-    CreateSuspendedProcess(bootCommand, AnsiToUtf16(argv[2]));
+    CreateSuspendedProcessW(bootCommand.c_str(), AnsiToUtf16(argv[2]).c_str());
     return 0;
 }
