@@ -2,8 +2,11 @@
 #include <iostream>
 #include <csignal>
 #include <signal.h>
+#include <string>
+#include <vector>
+
 HANDLE MainProcessHandle = NULL;
-// 快速创建命令
+
 std::wstring createBootCommand(std::wstring processName, std::wstring qucikLogin)
 {
     std::wstring processNameInternal = processName.c_str();
@@ -18,7 +21,7 @@ std::wstring createBootCommand(std::wstring processName, std::wstring qucikLogin
     }
     return realProcessName;
 }
-// 创建进程
+
 void CreateSuspendedProcess(std::wstring processName, std::wstring dllPath)
 {
     STARTUPINFOW si = {sizeof(si)};
@@ -70,6 +73,7 @@ void CreateSuspendedProcess(std::wstring processName, std::wstring dllPath)
         TerminateProcess(pi.hProcess, 0);
     }
 }
+
 void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
 {
     STARTUPINFOW si = {sizeof(si)};
@@ -125,6 +129,7 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
         TerminateProcess(pi.hProcess, 0);
     }
 }
+
 bool IsUserAnAdmin()
 {
     BOOL fIsRunAsAdmin = FALSE;
@@ -145,6 +150,7 @@ bool IsUserAnAdmin()
     }
     return fIsRunAsAdmin;
 }
+
 void signalHandler(int signum)
 {
     if (MainProcessHandle != NULL)
@@ -154,7 +160,7 @@ void signalHandler(int signum)
     }
     exit(signum);
 }
-// ANSI编码转换到UTF16 W宽编码
+
 std::wstring AnsiToUtf16(const std::string &str)
 {
     int size_needed = MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.size(), NULL, 0);
@@ -162,41 +168,30 @@ std::wstring AnsiToUtf16(const std::string &str)
     MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.size(), &wstrTo[0], size_needed);
     return wstrTo;
 }
+
 int main(int argc, char *argv[])
 {
-    // 判断当前是否为管理员权限
-    if (!IsUserAnAdmin())
-    {
-        std::cerr << "Please run as administrator." << std::endl;
-        system("pause");
-        return 1;
-    }
-    system("chcp 65001");
     signal(SIGTERM, signalHandler);
     signal(SIGINT, signalHandler);
+    std::vector<std::wstring> args;
     for (int i = 0; i < argc; i++)
     {
-        std::cout << "argv[" << i << "]:" << argv[i] << std::endl;
+        std::wstring argTemp = AnsiToUtf16(argv[i]);
+        args.push_back(argTemp);
+        std::wcout << "argv[" << i << "]:" << argTemp << std::endl;
     }
-    for (int i = 0; i < argc; i++)
-    {
-        //std::cout << argv[i] << " ";
-        std::wcout << AnsiToUtf16(argv[i]) << std::endl;
-    }
-    std::cout << std::endl;
     if (argc < 3)
     {
-        std::cerr << "Usage: " << argv[0] << " <processName> <dllPath> <quickLogin>" << std::endl;
         system("pause");
         return 1;
     }
-    std::string quickLoginQQ = "";
+    std::wstring quickLoginQQ = L"";
     if (argc == 4)
     {
-        quickLoginQQ = argv[3];
+        quickLoginQQ = args[3];
     }
-    std::wstring bootCommand = createBootCommand(AnsiToUtf16(argv[1]), AnsiToUtf16(quickLoginQQ));
+    std::wstring bootCommand = createBootCommand(args[1], quickLoginQQ);
     std::wcout << L"Boot Command:" << bootCommand << std::endl;
-    CreateSuspendedProcessW(bootCommand.c_str(), AnsiToUtf16(argv[2]).c_str());
+    CreateSuspendedProcessW(bootCommand.c_str(), args[2].c_str());
     return 0;
 }

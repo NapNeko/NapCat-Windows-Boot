@@ -7,7 +7,6 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
-#include <windows.h>
 #include <stdio.h>
 LPWSTR napcat_package = _wgetenv(L"NAPCAT_PATCH_PACKAGE");
 LPWSTR napcat_load = _wgetenv(L"NAPCAT_LOAD_PATH");
