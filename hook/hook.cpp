@@ -196,7 +196,7 @@ HANDLE WINAPI MyCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwS
 
     lock.lock();
     UnHookFunction64("Kernel32.dll", "CreateFileW");
-    if (!isCONOUTTimer & wcsstr(lpFileName, L"CONOUT$") != NULL)
+    if (!isCONOUTTimer & (wcsstr(lpFileName, L"CONOUT$") != NULL))
     {
 
         HMODULE hModule = GetModuleHandle("QQNT.dll");
@@ -210,7 +210,6 @@ HANDLE WINAPI MyCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwS
             address = address + 17;
             // 设置内存可写
             DWORD OldProtect = 0;
-            char buffer[100];
             VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
             // adress 赋值两个个字节 0x0F 0x84
             // 输出该地址前两个字节
@@ -242,6 +241,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
+        AllocConsole();
+        freopen("CONOUT$", "w", stdout);
         HookFunction64("Kernel32.dll", "CreateFileW", MyCreateFileW);
         break;
     case DLL_THREAD_ATTACH:
@@ -251,25 +252,3 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     }
     return TRUE;
 }
-// {
-//   "name": "qq-chat",
-//   "version": "9.9.15-28060",
-//   "private": true,
-//   "description": "QQ",
-//   "productName": "QQ",
-//   "author": {
-//     "name": "Tencent",
-//     "email": "QQ-Team@tencent.com"
-//   },
-//   "homepage": "https://im.qq.com",
-//   "sideEffects": true,
-//   "bin": {
-//     "qd": "externals/devtools/cli/index.js"
-//   },
-//   "main": "./application/app_launcher/index.js",
-//   "buildVersion": "28060",
-//   "isPureShell": true,
-//   "isByteCodeShell": true,
-//   "platform": "win32",
-//   "eleArch": "x64"
-// }

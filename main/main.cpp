@@ -4,24 +4,24 @@
 #include <signal.h>
 HANDLE MainProcessHandle = NULL;
 // 快速创建命令
-std::string createBootCommand(std::string processName, std::string qucikLogin)
+std::wstring createBootCommand(std::wstring processName, std::wstring qucikLogin)
 {
-    const char *processNameInternal = processName.c_str();
-    const char *commandLine = "--enable-logging";
-    std::string realProcessName = processNameInternal;
-    realProcessName += " ";
+    std::wstring processNameInternal = processName.c_str();
+    std::wstring commandLine = L"--enable-logging";
+    std::wstring realProcessName = processNameInternal;
+    realProcessName += L" ";
     realProcessName += commandLine;
     if (qucikLogin.length() > 0)
     {
-        realProcessName += " -q ";
+        realProcessName += L" -q ";
         realProcessName += qucikLogin;
     }
     return realProcessName;
 }
 // 创建进程
-void CreateSuspendedProcess(const char *processName, const char *dllPath)
+void CreateSuspendedProcess(std::wstring processName, std::wstring dllPath)
 {
-    STARTUPINFOA si = {sizeof(si)};
+    STARTUPINFOW si = {sizeof(si)};
     PROCESS_INFORMATION pi;
     ZeroMemory(&pi, sizeof(PROCESS_INFORMATION));
     ZeroMemory(&si, sizeof(STARTUPINFOA));
@@ -29,9 +29,9 @@ void CreateSuspendedProcess(const char *processName, const char *dllPath)
     si.dwFlags = STARTF_USESTDHANDLES;
     si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
     //  创建并挂起进程
-    if (!CreateProcessA(NULL, (LPSTR)processName, NULL, NULL, TRUE, CREATE_SUSPENDED, (LPVOID)NULL, NULL, &si, &pi))
+    if (!CreateProcessW(NULL, (LPWSTR)processName.c_str(), NULL, NULL, TRUE, CREATE_SUSPENDED, (LPVOID)NULL, NULL, &si, &pi))
     {
-        //输出错误信息
+        // 输出错误信息
         DWORD error = GetLastError();
         LPVOID errorMsg;
         FormatMessage(
@@ -42,7 +42,7 @@ void CreateSuspendedProcess(const char *processName, const char *dllPath)
             (LPSTR)&errorMsg,
             0,
             NULL);
-        std::cerr << "Error: " << (char*)errorMsg << std::endl;
+        std::cerr << "Error: " << (char *)errorMsg << std::endl;
         LocalFree(errorMsg);
         std::cerr << "Failed to start process." << std::endl;
         return;
@@ -50,10 +50,10 @@ void CreateSuspendedProcess(const char *processName, const char *dllPath)
     MainProcessHandle = pi.hProcess;
     std::cout << "[NapCat Backend] Main Process ID:" << pi.dwProcessId << std::endl;
     // 注入 DLL
-    LPVOID pRemoteBuf = VirtualAllocEx(pi.hProcess, NULL, strlen(dllPath) + 1, MEM_COMMIT, PAGE_READWRITE);
-    WriteProcessMemory(pi.hProcess, pRemoteBuf, (LPVOID)dllPath, strlen(dllPath) + 1, NULL);
+    LPVOID pRemoteBuf = VirtualAllocEx(pi.hProcess, NULL, (dllPath.size() + 1) * sizeof(wchar_t), MEM_COMMIT, PAGE_READWRITE);
+    WriteProcessMemory(pi.hProcess, pRemoteBuf, (LPVOID)dllPath.c_str(), (dllPath.size() + 1) * sizeof(wchar_t), NULL);
 
-    HANDLE hThread = CreateRemoteThread(pi.hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)LoadLibraryA, pRemoteBuf, 0, NULL);
+    HANDLE hThread = CreateRemoteThread(pi.hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)LoadLibraryW, pRemoteBuf, 0, NULL);
     WaitForSingleObject(hThread, INFINITE);
     // 恢复进程
     ResumeThread(pi.hThread);
@@ -99,7 +99,14 @@ void signalHandler(int signum)
     }
     exit(signum);
 }
-
+// ANSI编码转换到UTF16 W宽编码
+std::wstring AnsiToUtf16(const std::string &str)
+{
+    int size_needed = MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.size(), NULL, 0);
+    std::wstring wstrTo(size_needed, 0);
+    MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.size(), &wstrTo[0], size_needed);
+    return wstrTo;
+}
 int main(int argc, char *argv[])
 {
     // 判断当前是否为管理员权限
@@ -132,8 +139,8 @@ int main(int argc, char *argv[])
     {
         quickLoginQQ = argv[3];
     }
-    std::string bootCommand = createBootCommand(argv[1], quickLoginQQ);
-    std::cout << "Boot Command:" << bootCommand << std::endl;
-    CreateSuspendedProcess(bootCommand.c_str(), argv[2]);
+    std::wstring bootCommand = createBootCommand(AnsiToUtf16(argv[1]), AnsiToUtf16(quickLoginQQ));
+    std::wcout << L"Boot Command:" << bootCommand << std::endl;
+    CreateSuspendedProcess(bootCommand, AnsiToUtf16(argv[2]));
     return 0;
 }
