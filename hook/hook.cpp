@@ -234,6 +234,36 @@ HANDLE WINAPI MyCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwS
     lock.unlock();
     return ret;
 }
+void HookIATCreateFileW(HMODULE hModule)
+{
+    PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
+    PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)((BYTE *)hModule + pDosHeader->e_lfanew);
+    PIMAGE_IMPORT_DESCRIPTOR pImportDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE *)hModule + pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+    while (pImportDesc->Name)
+    {
+        LPCSTR pszModName = (LPCSTR)((BYTE *)hModule + pImportDesc->Name);
+        if (_stricmp(pszModName, "kernel32.dll") == 0)
+        {
+            PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((BYTE *)hModule + pImportDesc->FirstThunk);
+            while (pThunk->u1.Function)
+            {
+                PROC *ppfn = (PROC *)&pThunk->u1.Function;
+                if (*ppfn == (PROC)GetProcAddress(GetModuleHandleA("kernel32.dll"), "CreateFileW"))
+                {
+                    DWORD oldProtect;
+                    VirtualProtect(ppfn, sizeof(PROC), PAGE_EXECUTE_READWRITE, &oldProtect);
+                    OriginalCreateFileW = (CreateFileW_t)*ppfn;
+                    *ppfn = (PROC)HookedCreateFileW;
+                    VirtualProtect(ppfn, sizeof(PROC), oldProtect, &oldProtect);
+                    break;
+                }
+                pThunk++;
+            }
+            break;
+        }
+        pImportDesc++;
+    }
+}
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
