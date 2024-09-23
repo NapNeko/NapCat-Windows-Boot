@@ -106,7 +106,6 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
     // 关闭句柄
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
-    system("pause");
     // 判断进程是否残留
     if (WaitForSingleObject(pi.hProcess, 0) == WAIT_TIMEOUT)
     {
@@ -158,7 +157,6 @@ void CreateSuspendedProcess(const char *processName, const char *dllPath)
     // 关闭句柄
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
-    system("pause");
     // 判断进程是否残留
     if (WaitForSingleObject(pi.hProcess, 0) == WAIT_TIMEOUT)
     {
@@ -275,7 +273,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
                 std::cerr << "Error: " << (char *)errorMsg << std::endl;
                 LocalFree(errorMsg);
                 std::cerr << "Failed to elevate permissions." << std::endl;
-                system("pause");
                 return 1;
             }
             return 0;
@@ -383,7 +380,6 @@ int mainOld(int argc, char *argv[])
     if (argc < 3)
     {
         std::cerr << "Usage: " << argv[0] << " <processName> <dllPath> <quickLogin>" << std::endl;
-        system("pause");
         return 1;
     }
     std::string quickLoginQQ = "";
