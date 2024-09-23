@@ -1,63 +1,21 @@
 #include <Windows.h>
-#include <mutex>
 #include <vector>
 #include <psapi.h>
-#include <cstdint>
-#include <algorithm>
 #include <string>
-#include <sstream>
-#include <iomanip>
-#include <stdio.h>
+
 LPWSTR napcat_package = _wgetenv(L"NAPCAT_PATCH_PACKAGE");
 LPWSTR napcat_load = _wgetenv(L"NAPCAT_LOAD_PATH");
-void PrintBuffer(void *pBuff, unsigned int nLen)
-{
-    if (NULL == pBuff || 0 == nLen)
-    {
-        return;
-    }
 
-    const int nBytePerLine = 16;
-    unsigned char *p = (unsigned char *)pBuff;
-    char szHex[3 * nBytePerLine + 1] = {0};
-    char result[4096] = {0}; // 假设结果不会超过4096字节
-    char *pResult = result;
+typedef HANDLE(WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+typedef FARPROC(WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
 
-    pResult += sprintf(pResult, "-----------------begin-------------------\n");
-    for (unsigned int i = 0; i < nLen; ++i)
-    {
-        int idx = 3 * (i % nBytePerLine);
-        if (0 == idx)
-        {
-            memset(szHex, 0, sizeof(szHex));
-        }
-#ifdef WIN32
-        sprintf_s(&szHex[idx], 4, "%02x ", p[i]); // buff长度要多传入1个字节
-#else
-        snprintf(&szHex[idx], 4, "%02x ", p[i]); // buff长度要多传入1个字节
-#endif
+GetProcAddress_t OriginalGetProcAddress = NULL;
+CreateFileW_t OriginalCreateFileW = NULL;
 
-        // 以16个字节为一行，进行打印
-        if (0 == ((i + 1) % nBytePerLine))
-        {
-            pResult += sprintf(pResult, "%s\n", szHex);
-        }
-    }
-
-    // 打印最后一行未满16个字节的内容
-    if (0 != (nLen % nBytePerLine))
-    {
-        pResult += sprintf(pResult, "%s\n", szHex);
-    }
-
-    pResult += sprintf(pResult, "------------------end-------------------\n");
-
-    MessageBoxA(NULL, result, "Buffer Content", MB_OK);
-}
 BYTE OldCode[12] = {0x00};
 BYTE HookCode[12] = {0x48, 0xB8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xFF, 0xE0};
 BYTE jzCode[12] = {0x0F, 0x84};
-// 辅助函数：去除字符串中的所有空格
+
 std::string RemoveSpaces(const std::string &input)
 {
     std::string result;
@@ -182,19 +140,11 @@ void UnHookFunction64(const char *moduleName, LPCSTR lpFuncName)
     }
     VirtualProtect((LPVOID)FuncAddress, 12, OldProtect, &OldProtect);
 }
-char tempPathA[MAX_PATH];
-wchar_t tempPath[MAX_PATH];
-extern HANDLE WINAPI MyCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
-
-std::mutex lock;
-
 int PackageTimer = 0;
 bool isCONOUTTimer = false;
-HANDLE WINAPI MyCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
+HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 {
 
-    lock.lock();
-    UnHookFunction64("Kernel32.dll", "CreateFileW");
     if (!isCONOUTTimer & (wcsstr(lpFileName, L"CONOUT$") != NULL))
     {
 
@@ -230,8 +180,6 @@ HANDLE WINAPI MyCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwS
         lpFileName = napcat_load;
     }
     auto ret = CreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
-    HookFunction64("Kernel32.dll", "CreateFileW", MyCreateFileW);
-    lock.unlock();
     return ret;
 }
 void HookIATCreateFileW(HMODULE hModule)
@@ -270,9 +218,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
-        //AllocConsole();
-        //freopen("CONOUT$", "w", stdout);
-        HookFunction64("Kernel32.dll", "CreateFileW", MyCreateFileW);
         break;
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
