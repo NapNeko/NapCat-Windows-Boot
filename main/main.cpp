@@ -9,7 +9,7 @@ std::wstring env;
 
 bool addEnv(std::wstring key, std::wstring value)
 {
-    std::wcout << L"Add Env: " << key << L"=" << value << std::endl;
+    //std::wcout << L"Add Env: " << key << L"=" << value << std::endl;
     if (key.length() == 0 || value.length() == 0)
     {
         return false;
@@ -354,41 +354,5 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     std::wcout << L"NapCatWinBootHook.dll Path:" << QQInjectDll << std::endl;
     // 创建挂起进程
     CreateSuspendedProcessW(QQPath.c_str(), QQInjectDll.c_str());
-    return 0;
-}
-int mainOld(int argc, char *argv[])
-{
-    // 判断当前是否为管理员权限
-    // if (!IsUserAnAdmin())
-    // {
-    //     std::cerr << "Please run as administrator." << std::endl;
-    //     system("pause");
-    //     return 1;
-    // }
-    system("chcp 65001");
-    signal(SIGTERM, signalHandler);
-    signal(SIGINT, signalHandler);
-    for (int i = 0; i < argc; i++)
-    {
-        std::cout << "argv[" << i << "]:" << argv[i] << std::endl;
-    }
-    for (int i = 0; i < argc; i++)
-    {
-        std::cout << argv[i] << " ";
-    }
-    std::cout << std::endl;
-    if (argc < 3)
-    {
-        std::cerr << "Usage: " << argv[0] << " <processName> <dllPath> <quickLogin>" << std::endl;
-        return 1;
-    }
-    std::string quickLoginQQ = "";
-    if (argc == 4)
-    {
-        quickLoginQQ = argv[3];
-    }
-    std::string bootCommand = createBootCommand(argv[1], quickLoginQQ);
-    std::cout << "Boot Command:" << bootCommand << std::endl;
-    CreateSuspendedProcess(bootCommand.c_str(), argv[2]);
     return 0;
 }
