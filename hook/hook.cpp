@@ -98,6 +98,46 @@ uint64_t SearchRangeAddressInModule(HMODULE module, const std::string &hexPatter
 
     return 0;
 }
+//HookedGetProcAddress
+FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
+{
+}
+void HookIATMainGetProcAddress()
+{
+    // AllocConsole();
+    // freopen("CONOUT$", "w", stdout);
+    // std::wcout << env_patch_package_hack_main << std::endl;
+    // std::wcout << env_patch_package_real_main << std::endl;
+    // std::wcout << env_patch_package << std::endl;
+    HMODULE hModule = GetModuleHandle(NULL);
+    PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
+    PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)((BYTE *)hModule + pDosHeader->e_lfanew);
+    PIMAGE_IMPORT_DESCRIPTOR pImportDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE *)hModule + pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
+    while (pImportDesc->Name)
+    {
+        LPCSTR pszModName = (LPCSTR)((BYTE *)hModule + pImportDesc->Name);
+        if (_stricmp(pszModName, "kernel32.dll") == 0)
+        {
+            PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((BYTE *)hModule + pImportDesc->FirstThunk);
+            while (pThunk->u1.Function)
+            {
+                PROC *ppfn = (PROC *)&pThunk->u1.Function;
+                if (*ppfn == (PROC)GetProcAddress(GetModuleHandleA("kernel32.dll"), "GetProcAddress"))
+                {
+                    DWORD oldProtect;
+                    VirtualProtect(ppfn, sizeof(PROC), PAGE_EXECUTE_READWRITE, &oldProtect);
+                    OriginalGetProcAddress = (GetProcAddress_t)*ppfn;
+                    *ppfn = (PROC)HookedGetProcAddress;
+                    VirtualProtect(ppfn, sizeof(PROC), oldProtect, &oldProtect);
+                    break;
+                }
+                pThunk++;
+            }
+            break;
+        }
+        pImportDesc++;
+    }
+}
 
 bool HookFunction64(const char *moduleName, LPCSTR lpFuncName, LPVOID lpFunction)
 {
@@ -113,10 +153,7 @@ bool HookFunction64(const char *moduleName, LPCSTR lpFuncName, LPVOID lpFunction
     VirtualProtect((LPVOID)FuncAddress, 12, OldProtect, &OldProtect);
     return true;
 }
-int8_t fuckSignFunction()
-{
-    return 0;
-}
+
 bool HookAnyFunction64(LPVOID originFuncion, LPVOID lpFunction)
 {
     DWORD_PTR FuncAddress = (UINT64)originFuncion;
@@ -130,6 +167,7 @@ bool HookAnyFunction64(LPVOID originFuncion, LPVOID lpFunction)
     VirtualProtect((LPVOID)FuncAddress, 12, OldProtect, &OldProtect);
     return true;
 }
+
 void UnHookFunction64(const char *moduleName, LPCSTR lpFuncName)
 {
     DWORD OldProtect = 0;
@@ -218,6 +256,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
+        HookIATMainGetProcAddress();
         break;
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
