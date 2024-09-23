@@ -85,7 +85,6 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
     si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
     // ACSPORT
 
-    std::wcout << L"Process Path: " << GetEnvironmentStringsW() << std::endl;
     if (!CreateProcessW(NULL, (LPWSTR)processName, NULL, NULL, TRUE, CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, (LPVOID)NULL, NULL, &si, &pi))
     {
         // 输出错误信息
