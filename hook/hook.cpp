@@ -16,8 +16,11 @@ BYTE OldCode[12] = {0x00};
 BYTE HookCode[12] = {0x48, 0xB8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xFF, 0xE0};
 BYTE jzCode[12] = {0x0F, 0x84};
 
+void HookIATCreateFileW(HMODULE hModule);
+// 辅助函数 去除字符串中的所有空格
 std::string RemoveSpaces(const std::string &input)
 {
+
     std::string result;
     for (char c : input)
     {
@@ -29,7 +32,7 @@ std::string RemoveSpaces(const std::string &input)
     return result;
 }
 
-// 辅助函数：将十六进制字符串转换为字节模式
+// 辅助函数 将十六进制字符串转换为字节模式
 std::vector<uint8_t> ParseHexPattern(const std::string &hexPattern)
 {
     std::string cleanedPattern = RemoveSpaces(hexPattern);
@@ -50,7 +53,7 @@ std::vector<uint8_t> ParseHexPattern(const std::string &hexPattern)
     return pattern;
 }
 
-// 新的匹配函数，支持通配符
+// 支持通配符
 bool MatchPatternWithWildcard(const uint8_t *data, const std::vector<uint8_t> &pattern)
 {
     for (size_t i = 0; i < pattern.size(); ++i)
@@ -62,7 +65,6 @@ bool MatchPatternWithWildcard(const uint8_t *data, const std::vector<uint8_t> &p
     }
     return true;
 }
-
 uint64_t SearchRangeAddressInModule(HMODULE module, const std::string &hexPattern, uint64_t searchStartRVA = 0, uint64_t searchEndRVA = 0)
 {
     HANDLE processHandle = GetCurrentProcess();
@@ -98,10 +100,63 @@ uint64_t SearchRangeAddressInModule(HMODULE module, const std::string &hexPatter
 
     return 0;
 }
-//HookedGetProcAddress
+
+bool hookVeify(HMODULE hModule)
+{
+    try
+    {
+        std::string pattern = "E8 ?? ?? ?? ?? 84 C0 48 ?? ?? ?? ?? ?? ?? ?? ?? ?? 0F ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? F6 84 ?? ?? ?? ?? ?? ?? 74 ?? 48 8B ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ??";
+        UINT64 address = SearchRangeAddressInModule(hModule, pattern);
+        // 调用hook函数
+        //  ptr转成str输出显示
+        address = address + 17;
+        // 设置内存可写
+        DWORD OldProtect = 0;
+        VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
+        // adress 赋值两个个字节 0x0F 0x84
+        // 输出该地址前两个字节
+        // PrintBuffer((void *)address, 2);
+        memcpy((LPVOID)address, jzCode, 2);
+        VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        return false;
+    }
+}
+
+void initLauncher(HMODULE hModule)
+{
+
+    bool patchVeify = hookVeify(hModule);
+    HookIATCreateFileW(hModule);
+}
+
 FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 {
+    // 判断lpProcName是否为Null是否可读
+    if (IsBadReadPtr(lpProcName, 1))
+    {
+        return NULL;
+    }
+    // 判断lpProcName是否为Null
+    if (lpProcName == NULL)
+    {
+        return NULL;
+    }
+    if (strcmp(lpProcName, "QQMain") == 0)
+    {
+        if (hModule != NULL)
+        {
+            initLauncher(hModule);
+        }
+    }
+
+    // system("pause");
+    return OriginalGetProcAddress(hModule, lpProcName);
 }
+
 void HookIATMainGetProcAddress()
 {
     // AllocConsole();
@@ -139,21 +194,6 @@ void HookIATMainGetProcAddress()
     }
 }
 
-bool HookFunction64(const char *moduleName, LPCSTR lpFuncName, LPVOID lpFunction)
-{
-    DWORD_PTR FuncAddress = (UINT64)GetProcAddress(GetModuleHandleA(moduleName), lpFuncName);
-    DWORD OldProtect = 0;
-
-    if (VirtualProtect((LPVOID)FuncAddress, 12, PAGE_EXECUTE_READWRITE, &OldProtect))
-    {
-        memcpy(OldCode, (LPVOID)FuncAddress, 12);     // 拷贝原始机器码指令
-        *(PINT64)(HookCode + 2) = (UINT64)lpFunction; // 填充90为指定跳转地址
-    }
-    memcpy((LPVOID)FuncAddress, &HookCode, sizeof(HookCode)); // 拷贝Hook机器指令
-    VirtualProtect((LPVOID)FuncAddress, 12, OldProtect, &OldProtect);
-    return true;
-}
-
 bool HookAnyFunction64(LPVOID originFuncion, LPVOID lpFunction)
 {
     DWORD_PTR FuncAddress = (UINT64)originFuncion;
@@ -168,58 +208,19 @@ bool HookAnyFunction64(LPVOID originFuncion, LPVOID lpFunction)
     return true;
 }
 
-void UnHookFunction64(const char *moduleName, LPCSTR lpFuncName)
-{
-    DWORD OldProtect = 0;
-    UINT64 FuncAddress = (UINT64)GetProcAddress(GetModuleHandleA(moduleName), lpFuncName);
-    if (VirtualProtect((LPVOID)FuncAddress, 12, PAGE_EXECUTE_READWRITE, &OldProtect))
-    {
-        memcpy((LPVOID)FuncAddress, OldCode, sizeof(OldCode));
-    }
-    VirtualProtect((LPVOID)FuncAddress, 12, OldProtect, &OldProtect);
-}
-int PackageTimer = 0;
-bool isCONOUTTimer = false;
 HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 {
-
-    if (!isCONOUTTimer & (wcsstr(lpFileName, L"CONOUT$") != NULL))
-    {
-
-        HMODULE hModule = GetModuleHandle("QQNT.dll");
-        if (hModule != NULL)
-        {
-            isCONOUTTimer = true;
-            std::string pattern = "E8 ?? ?? ?? ?? 84 C0 48 ?? ?? ?? ?? ?? ?? ?? ?? ?? 0F ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? F6 84 ?? ?? ?? ?? ?? ?? 74 ?? 48 8B ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ??";
-            UINT64 address = SearchRangeAddressInModule(hModule, pattern);
-            // 调用hook函数
-            //  ptr转成str输出显示
-            address = address + 17;
-            // 设置内存可写
-            DWORD OldProtect = 0;
-            VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
-            // adress 赋值两个个字节 0x0F 0x84
-            // 输出该地址前两个字节
-            // PrintBuffer((void *)address, 2);
-            memcpy((LPVOID)address, jzCode, 2);
-            VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
-
-            // sprintf(buffer, "%p", address);
-            // MessageBoxA(NULL, buffer, "CreateFileW", MB_OK);
-        }
-    }
     if (napcat_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
     {
         lpFileName = napcat_package;
-        // MessageBoxW(NULL, lpFileName, L"CreateFileW", MB_OK);
     }
     if (napcat_load && wcsstr(lpFileName, L"loadNapCat.js") != NULL)
     {
         lpFileName = napcat_load;
     }
-    auto ret = CreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
-    return ret;
+    return CreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
 }
+
 void HookIATCreateFileW(HMODULE hModule)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
