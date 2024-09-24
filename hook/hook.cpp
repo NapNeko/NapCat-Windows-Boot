@@ -11,10 +11,8 @@ BYTE jzCode[12] = {0x0F, 0x84};
 
 LPWSTR env_jump_patch_veify = _wgetenv(L"LAUNCHER_JUMP_VEIFY_PATCH");
 LPWSTR env_patch_package = _wgetenv(L"LAUNCHER_PACKAGE_PATCH");
-LPWSTR env_patch_package_once = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_ONCE");
 LPWSTR env_patch_package_hack_main = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_HACK_MAIN");
 LPWSTR env_patch_package_real_main = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_REAL_MAIN");
-int patch_package_init_once = 0;
 
 typedef HANDLE(WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
 typedef FARPROC(WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
@@ -178,16 +176,12 @@ HANDLE WINAPI HookedCreateFileW(
     DWORD dwFlagsAndAttributes,
     HANDLE hTemplateFile)
 {
-    //std::wcout << L"Hooked CreateFileW: " << lpFileName << std::endl;
+    // std::wcout << L"Hooked CreateFileW: " << lpFileName << std::endl;
 
     if (env_patch_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
     {
 
-        if (patch_package_init_once < 5)
-        {
-            lpFileName = env_patch_package;
-        }
-        patch_package_init_once++;
+        lpFileName = env_patch_package;
     }
     if (env_patch_package_hack_main && env_patch_package_real_main && wcsstr(lpFileName, env_patch_package_hack_main) != NULL)
     {
@@ -197,11 +191,11 @@ HANDLE WINAPI HookedCreateFileW(
 }
 void HookIATMainGetProcAddress()
 {
-    //AllocConsole();
-    //freopen("CONOUT$", "w", stdout);
-    //std::wcout << env_patch_package_hack_main << std::endl;
-    //std::wcout << env_patch_package_real_main << std::endl;
-    //std::wcout << env_patch_package << std::endl;
+    // AllocConsole();
+    // freopen("CONOUT$", "w", stdout);
+    // std::wcout << env_patch_package_hack_main << std::endl;
+    // std::wcout << env_patch_package_real_main << std::endl;
+    // std::wcout << env_patch_package << std::endl;
     HMODULE hModule = GetModuleHandle(NULL);
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
     PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)((BYTE *)hModule + pDosHeader->e_lfanew);

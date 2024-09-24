@@ -9,7 +9,7 @@ std::wstring env;
 
 bool addEnv(std::wstring key, std::wstring value)
 {
-    //std::wcout << L"Add Env: " << key << L"=" << value << std::endl;
+    // std::wcout << L"Add Env: " << key << L"=" << value << std::endl;
     if (key.length() == 0 || value.length() == 0)
     {
         return false;
@@ -20,18 +20,22 @@ bool addEnv(std::wstring key, std::wstring value)
     env.append(1, L'\0');
     return true;
 }
-bool initEnv(){
-    //循环遍历当前所有环境变量 并调用addEnv添加
+bool initEnv()
+{
+    // 循环遍历当前所有环境变量 并调用addEnv添加
     LPWCH envStrings = GetEnvironmentStringsW();
-    if (envStrings == NULL) {
+    if (envStrings == NULL)
+    {
         return false;
     }
 
     LPWCH envVar = envStrings;
-    while (*envVar) {
+    while (*envVar)
+    {
         std::wstring envEntry(envVar);
         size_t pos = envEntry.find(L'=');
-        if (pos != std::wstring::npos) {
+        if (pos != std::wstring::npos)
+        {
             std::wstring key = envEntry.substr(0, pos);
             std::wstring value = envEntry.substr(pos + 1);
             addEnv(key, value);
@@ -241,7 +245,7 @@ std::tuple<bool, std::wstring> getQQInstalledW()
     return std::make_tuple(true, QQPath);
 }
 
-//Windows下的主函数
+// Windows下的主函数
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
     initEnv();
@@ -340,7 +344,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     if (outFile.is_open())
     {
         outFile << L"require('" << doubleBackslashesPath << L"');" << std::endl;
-        outFile << L"require('./application/app_launcher/index.js');" << std::endl;
+        // outFile << L"require('./application/app_launcher/index.js');" << std::endl;
         outFile.close();
         std::wcout << L"File written successfully to " << realMainPath << std::endl;
     }
