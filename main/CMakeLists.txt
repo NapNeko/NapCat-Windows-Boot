@@ -17,4 +17,4 @@ file(GLOB SOURCES "*.cpp")
 #add_executable (NapCatWinBootMain ${SOURCES})
 add_executable (NapCatWinBootMain WIN32 ${SOURCES})
 #设置Manifest
-set_target_properties(NapCatWinBootMain PROPERTIES LINK_FLAGS "/MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\"")
+# set_target_properties(NapCatWinBootMain PROPERTIES LINK_FLAGS "/MANIFESTUAC:\"level='requireAdministrator' uiAccess='false'\"")

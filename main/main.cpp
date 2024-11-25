@@ -250,38 +250,38 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 {
     initEnv();
     // 判断当前是否为管理员权限
-    if (!IsUserAnAdmin())
-    {
-        // 重启并提升权限
-        char szPath[MAX_PATH];
-        if (GetModuleFileNameA(NULL, szPath, MAX_PATH))
-        {
-            SHELLEXECUTEINFOA sei = {sizeof(sei)};
-            sei.lpVerb = "runas";
-            sei.lpFile = szPath;
-            sei.lpParameters = GetCommandLineA();
-            sei.hwnd = NULL;
-            sei.nShow = SW_NORMAL;
-            if (!ShellExecuteExA(&sei))
-            {
-                DWORD error = GetLastError();
-                LPVOID errorMsg;
-                FormatMessage(
-                    FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                    NULL,
-                    error,
-                    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                    (LPSTR)&errorMsg,
-                    0,
-                    NULL);
-                std::cerr << "Error: " << (char *)errorMsg << std::endl;
-                LocalFree(errorMsg);
-                std::cerr << "Failed to elevate permissions." << std::endl;
-                return 1;
-            }
-            return 0;
-        }
-    }
+    // if (!IsUserAnAdmin())
+    // {
+    //     // 重启并提升权限
+    //     char szPath[MAX_PATH];
+    //     if (GetModuleFileNameA(NULL, szPath, MAX_PATH))
+    //     {
+    //         SHELLEXECUTEINFOA sei = {sizeof(sei)};
+    //         sei.lpVerb = "runas";
+    //         sei.lpFile = szPath;
+    //         sei.lpParameters = GetCommandLineA();
+    //         sei.hwnd = NULL;
+    //         sei.nShow = SW_NORMAL;
+    //         if (!ShellExecuteExA(&sei))
+    //         {
+    //             DWORD error = GetLastError();
+    //             LPVOID errorMsg;
+    //             FormatMessage(
+    //                 FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+    //                 NULL,
+    //                 error,
+    //                 MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+    //                 (LPSTR)&errorMsg,
+    //                 0,
+    //                 NULL);
+    //             std::cerr << "Error: " << (char *)errorMsg << std::endl;
+    //             LocalFree(errorMsg);
+    //             std::cerr << "Failed to elevate permissions." << std::endl;
+    //             return 1;
+    //         }
+    //         return 0;
+    //     }
+    // }
     // 设置控制台编码
     system("chcp 65001");
     // 获取QQ安装路径
