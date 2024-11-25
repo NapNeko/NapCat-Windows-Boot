@@ -172,25 +172,20 @@ int main(int argc, char *argv[])
 {
     signal(SIGTERM, signalHandler);
     signal(SIGINT, signalHandler);
-    std::vector<std::wstring> args;
-    for (int i = 0; i < argc; i++)
+    wchar_t buffer[MAX_PATH];
+    if (argc < 2)
     {
-        std::wstring argTemp = AnsiToUtf16(argv[i]);
-        args.push_back(argTemp);
-        std::wcout << "argv[" << i << "]:" << argTemp << std::endl;
-    }
-    if (argc < 3)
-    {
-        system("pause");
+        std::cerr << "Usage: " << argv[0] << " <quickLogin>" << std::endl;
         return 1;
     }
-    std::wstring quickLoginQQ = L"";
-    if (argc == 4)
-    {
-        quickLoginQQ = args[3];
-    }
-    std::wstring bootCommand = createBootCommand(args[1], quickLoginQQ);
+    std::wstring quickLogin = AnsiToUtf16(argv[1]);
+    GetModuleFileNameW(NULL, buffer, MAX_PATH);
+    std::wstring::size_type pos = std::wstring(buffer).find_last_of(L"\\/");
+    std::wstring currentDir = std::wstring(buffer).substr(0, pos);
+    std::wstring processPath = currentDir + L"\\QQ.exe";
+    std::wstring dllPath = currentDir + L"\\NapCatWinBootHook.dll";
+    std::wstring bootCommand = createBootCommand(processPath, quickLogin.c_str());
     std::wcout << L"Boot Command:" << bootCommand << std::endl;
-    CreateSuspendedProcessW(bootCommand.c_str(), args[2].c_str());
+    CreateSuspendedProcessW(bootCommand.c_str(), dllPath.c_str());
     return 0;
 }

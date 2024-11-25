@@ -3,9 +3,6 @@
 #include <psapi.h>
 #include <string>
 
-LPWSTR napcat_package = _wgetenv(L"NAPCAT_PATCH_PACKAGE");
-LPWSTR napcat_load = _wgetenv(L"NAPCAT_LOAD_PATH");
-
 typedef HANDLE(WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
 typedef FARPROC(WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
 
@@ -130,7 +127,7 @@ void initLauncher(HMODULE hModule)
 {
 
     bool patchVeify = hookVeify(hModule);
-    HookIATCreateFileW(hModule);
+    //HookIATCreateFileW(hModule);
 }
 
 FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
@@ -210,13 +207,13 @@ bool HookAnyFunction64(LPVOID originFuncion, LPVOID lpFunction)
 
 HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 {
-    if (napcat_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
+    if (wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
     {
-        lpFileName = napcat_package;
-    }
-    if (napcat_load && wcsstr(lpFileName, L"loadNapCat.js") != NULL)
-    {
-        lpFileName = napcat_load;
+        wchar_t buffer[MAX_PATH];
+        GetModuleFileNameW(NULL, buffer, MAX_PATH);
+        std::wstring::size_type pos = std::wstring(buffer).find_last_of(L"\\/");
+        std::wstring currentDir = std::wstring(buffer).substr(0, pos);
+        lpFileName = (currentDir + L"\\ntqq.json").c_str();
     }
     return CreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
 }
