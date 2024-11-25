@@ -176,9 +176,8 @@ int main(int argc, char *argv[])
     if (argc < 2)
     {
         std::cerr << "Usage: " << argv[0] << " <quickLogin>" << std::endl;
-        return 1;
     }
-    std::wstring quickLogin = AnsiToUtf16(argv[1]);
+    std::wstring quickLogin = argc < 2 ? L"" : AnsiToUtf16(argv[1]);
     GetModuleFileNameW(NULL, buffer, MAX_PATH);
     std::wstring::size_type pos = std::wstring(buffer).find_last_of(L"\\/");
     std::wstring currentDir = std::wstring(buffer).substr(0, pos);
