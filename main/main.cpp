@@ -9,7 +9,7 @@ HANDLE MainProcessHandle = NULL;
 
 std::wstring createBootCommand(std::wstring processName, std::wstring qucikLogin)
 {
-    std::wstring processNameInternal = processName.c_str();
+    std::wstring processNameInternal = L"\"" + processName + L"\"";
     std::wstring commandLine = L"--enable-logging";
     std::wstring realProcessName = processNameInternal;
     realProcessName += L" ";
