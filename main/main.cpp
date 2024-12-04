@@ -1,77 +1,21 @@
 #include <windows.h>
 #include <iostream>
 #include <csignal>
-#include <signal.h>
 #include <string>
 #include <vector>
 
 HANDLE MainProcessHandle = NULL;
 
-std::wstring createBootCommand(std::wstring processName, std::wstring qucikLogin)
+std::wstring createBootCommand(const std::wstring &processName, const std::wstring &quickLogin)
 {
-    std::wstring processNameInternal = processName.c_str();
+    std::wstring processNameInternal = L"\"" + processName + L"\"";
     std::wstring commandLine = L"--enable-logging";
-    std::wstring realProcessName = processNameInternal;
-    realProcessName += L" ";
-    realProcessName += commandLine;
-    if (qucikLogin.length() > 0)
+    std::wstring realProcessName = processNameInternal + L" " + commandLine;
+    if (!quickLogin.empty())
     {
-        realProcessName += L" -q ";
-        realProcessName += qucikLogin;
+        realProcessName += L" -q " + quickLogin;
     }
     return realProcessName;
-}
-
-void CreateSuspendedProcess(std::wstring processName, std::wstring dllPath)
-{
-    STARTUPINFOW si = {sizeof(si)};
-    PROCESS_INFORMATION pi;
-    ZeroMemory(&pi, sizeof(PROCESS_INFORMATION));
-    ZeroMemory(&si, sizeof(STARTUPINFOA));
-    // 修改标准输出流
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-    //  创建并挂起进程
-    if (!CreateProcessW(NULL, (LPWSTR)processName.c_str(), NULL, NULL, TRUE, CREATE_SUSPENDED, (LPVOID)NULL, NULL, &si, &pi))
-    {
-        // 输出错误信息
-        DWORD error = GetLastError();
-        LPVOID errorMsg;
-        FormatMessage(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-            NULL,
-            error,
-            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            (LPSTR)&errorMsg,
-            0,
-            NULL);
-        std::cerr << "Error: " << (char *)errorMsg << std::endl;
-        LocalFree(errorMsg);
-        std::cerr << "Failed to start process." << std::endl;
-        return;
-    }
-    MainProcessHandle = pi.hProcess;
-    std::cout << "[NapCat Backend] Main Process ID:" << pi.dwProcessId << std::endl;
-    // 注入 DLL
-    LPVOID pRemoteBuf = VirtualAllocEx(pi.hProcess, NULL, (dllPath.size() + 1) * sizeof(wchar_t), MEM_COMMIT, PAGE_READWRITE);
-    WriteProcessMemory(pi.hProcess, pRemoteBuf, (LPVOID)dllPath.c_str(), (dllPath.size() + 1) * sizeof(wchar_t), NULL);
-
-    HANDLE hThread = CreateRemoteThread(pi.hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)LoadLibraryW, pRemoteBuf, 0, NULL);
-    WaitForSingleObject(hThread, INFINITE);
-    // 恢复进程
-    ResumeThread(pi.hThread);
-    // 等待进程结束
-    WaitForSingleObject(pi.hProcess, INFINITE);
-
-    // 关闭句柄
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
-    system("pause");
-    // 判断进程是否残留
-    if (WaitForSingleObject(pi.hProcess, 0) == WAIT_TIMEOUT)
-    {
-        TerminateProcess(pi.hProcess, 0);
-    }
 }
 
 void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
@@ -80,14 +24,11 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
     PROCESS_INFORMATION pi;
     ZeroMemory(&pi, sizeof(PROCESS_INFORMATION));
     ZeroMemory(&si, sizeof(STARTUPINFOW));
-    // 修改标准输出流
     si.dwFlags = STARTF_USESTDHANDLES;
     si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-    // ACSPORT
 
-    if (!CreateProcessW(NULL, (LPWSTR)processName, NULL, NULL, TRUE, CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, (LPVOID)NULL, NULL, &si, &pi))
+    if (!CreateProcessW(NULL, (LPWSTR)processName, NULL, NULL, TRUE, CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, NULL, NULL, &si, &pi))
     {
-        // 输出错误信息
         DWORD error = GetLastError();
         LPVOID errorMsg;
         FormatMessageW(
@@ -98,7 +39,6 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
             (LPWSTR)&errorMsg,
             0,
             NULL);
-        // 输出错误代码和程序路径
         std::wcerr << L"Error Code: " << error << std::endl;
         std::wcerr << L"Process Path: " << processName << std::endl;
         std::wcerr << L"Error: " << (wchar_t *)errorMsg << std::endl;
@@ -108,21 +48,18 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
     }
     MainProcessHandle = pi.hProcess;
     std::wcout << L"[NapCat Backend] Main Process ID:" << pi.dwProcessId << std::endl;
-    // 注入 DLL
+
     LPVOID pRemoteBuf = VirtualAllocEx(pi.hProcess, NULL, (wcslen(dllPath) + 1) * sizeof(wchar_t), MEM_COMMIT, PAGE_READWRITE);
     WriteProcessMemory(pi.hProcess, pRemoteBuf, (LPVOID)dllPath, (wcslen(dllPath) + 1) * sizeof(wchar_t), NULL);
 
     HANDLE hThread = CreateRemoteThread(pi.hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)LoadLibraryW, pRemoteBuf, 0, NULL);
     WaitForSingleObject(hThread, INFINITE);
-    // 恢复进程
     ResumeThread(pi.hThread);
-    // 等待进程结束
     WaitForSingleObject(pi.hProcess, INFINITE);
 
-    // 关闭句柄
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
-    // 判断进程是否残留
+
     if (WaitForSingleObject(pi.hProcess, 0) == WAIT_TIMEOUT)
     {
         TerminateProcess(pi.hProcess, 0);
@@ -132,19 +69,11 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
 bool IsUserAnAdmin()
 {
     BOOL fIsRunAsAdmin = FALSE;
-    DWORD dwError = ERROR_SUCCESS;
     PSID pAdministratorsGroup = NULL;
     SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
-    if (!AllocateAndInitializeSid(&NtAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &pAdministratorsGroup))
+    if (AllocateAndInitializeSid(&NtAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &pAdministratorsGroup))
     {
-        dwError = GetLastError();
-    }
-    else
-    {
-        if (!CheckTokenMembership(NULL, pAdministratorsGroup, &fIsRunAsAdmin))
-        {
-            dwError = GetLastError();
-        }
+        CheckTokenMembership(NULL, pAdministratorsGroup, &fIsRunAsAdmin);
         FreeSid(pAdministratorsGroup);
     }
     return fIsRunAsAdmin;
@@ -179,12 +108,11 @@ int main(int argc, char *argv[])
     }
     std::wstring quickLogin = argc < 2 ? L"" : AnsiToUtf16(argv[1]);
     GetModuleFileNameW(NULL, buffer, MAX_PATH);
-    std::wstring::size_type pos = std::wstring(buffer).find_last_of(L"\\/");
-    std::wstring currentDir = std::wstring(buffer).substr(0, pos);
+    std::wstring currentDir = std::wstring(buffer).substr(0, std::wstring(buffer).find_last_of(L"\\/"));
     std::wstring processPath = currentDir + L"\\QQ.exe";
     std::wstring dllPath = currentDir + L"\\NapCatWinBootHook.dll";
-    std::wstring bootCommand = createBootCommand(processPath, quickLogin.c_str());
-    std::wcout << L"Boot Command:" << bootCommand << std::endl;
+    std::wstring bootCommand = createBootCommand(processPath, quickLogin);
+    std::wcout << L"Boot Command: " << bootCommand << std::endl;
     CreateSuspendedProcessW(bootCommand.c_str(), dllPath.c_str());
     return 0;
 }
