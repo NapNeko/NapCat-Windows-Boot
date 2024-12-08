@@ -182,7 +182,15 @@ HANDLE WINAPI HookedCreateFileW(
     {
 
         lpFileName = env_patch_package;
-        return OriginalCreateFileW(lpFileName, GENERIC_READ, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+        return CreateFileW(
+            lpFileName,
+            GENERIC_READ,
+            FILE_SHARE_READ,
+            NULL,
+            OPEN_EXISTING,
+            dwFlagsAndAttributes,
+            hTemplateFile);
+        //return OriginalCreateFileW(lpFileName, GENERIC_READ, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
     }
     if (env_patch_package_hack_main && env_patch_package_real_main && wcsstr(lpFileName, env_patch_package_hack_main) != NULL)
     {
