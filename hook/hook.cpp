@@ -212,7 +212,15 @@ HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD
 {
     if (napcat_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
     {
-        lpFileName = napcat_package;
+        // lpFileName = napcat_package;
+        return CreateFileW(
+            napcat_package,
+            GENERIC_READ,
+            FILE_SHARE_READ,
+            NULL,
+            OPEN_EXISTING,
+            dwFlagsAndAttributes,
+            hTemplateFile);
     }
     if (napcat_load && wcsstr(lpFileName, L"loadNapCat.js") != NULL)
     {
