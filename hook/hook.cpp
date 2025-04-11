@@ -114,6 +114,31 @@ uint64_t SearchRangeAddressInModule(HMODULE module, const std::string &hexPatter
     return 0;
 }
 
+bool hookVeifyNew(HMODULE hModule)
+{
+    try
+    {
+        std::string pattern = "E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ??";
+        UINT64 address = SearchRangeAddressInModule(hModule, pattern);
+        // 调用hook函数
+        //  ptr转成str输出显示
+        address = address + 12;
+        // 设置内存可写
+        DWORD OldProtect = 0;
+        VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
+        // adress 赋值两个个字节 0x0F 0x84
+        // 输出该地址前两个字节
+        //PrintBuffer((LPVOID)address, 2);
+        memcpy((LPVOID)address, jzCode, 2);
+        VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
+        //PrintBuffer((LPVOID)address, 2);
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        return false;
+    }
+}
 bool hookVeify(HMODULE hModule)
 {
     try
@@ -140,7 +165,7 @@ bool hookVeify(HMODULE hModule)
     }
 }
 
-void initLauncher(HMODULE hModule)
+void initLauncherNew(HMODULE hModule)
 {
 
     bool patchVeify = hookVeify(hModule);
@@ -163,7 +188,7 @@ FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
     {
         if (hModule != NULL)
         {
-            initLauncher(hModule);
+            initLauncherNew(hModule);
         }
     }
 
