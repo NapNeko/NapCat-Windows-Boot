@@ -118,18 +118,20 @@ bool hookVeify(HMODULE hModule)
 {
     try
     {
-        std::string pattern = "E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ??";
+        std::string pattern = "E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ??";
         UINT64 address = SearchRangeAddressInModule(hModule, pattern);
         // 调用hook函数
         //  ptr转成str输出显示
-        address = address + 7;
+        address = address + 12;
         // 设置内存可写
         DWORD OldProtect = 0;
         VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
         // adress 赋值两个个字节 0x0F 0x84
         // 输出该地址前两个字节
+        //PrintBuffer((LPVOID)address, 2);
         memcpy((LPVOID)address, jzCode, 2);
         VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
+        //PrintBuffer((LPVOID)address, 2);
         return true;
     }
     catch (const std::exception &e)
@@ -222,7 +224,7 @@ bool HookAnyFunction64(LPVOID originFuncion, LPVOID lpFunction)
 
 HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 {
-    MessageBoxW(NULL, lpFileName, L"HookedCreateFileW", MB_OK);
+    //MessageBoxW(NULL, lpFileName, L"HookedCreateFileW", MB_OK);
     if (napcat_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
     {
         lpFileName = napcat_package;
