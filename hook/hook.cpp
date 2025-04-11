@@ -3,7 +3,7 @@
 #include <psapi.h>
 #include <string>
 #include <atlstr.h>
-
+// 本项目该分支用于NapCat主仓库 Windows平台启动器
 LPWSTR napcat_package = _wgetenv(L"NAPCAT_PATCH_PACKAGE");
 LPWSTR napcat_load = _wgetenv(L"NAPCAT_LOAD_PATH");
 
