@@ -128,10 +128,10 @@ bool hookVeifyNew(HMODULE hModule)
         VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
         // adress 赋值两个个字节 0x0F 0x84
         // 输出该地址前两个字节
-        //PrintBuffer((LPVOID)address, 2);
+        // PrintBuffer((LPVOID)address, 2);
         memcpy((LPVOID)address, jzCode, 2);
         VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
-        //PrintBuffer((LPVOID)address, 2);
+        // PrintBuffer((LPVOID)address, 2);
         return true;
     }
     catch (const std::exception &e)
@@ -143,20 +143,19 @@ bool hookVeify(HMODULE hModule)
 {
     try
     {
-        std::string pattern = "E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ??";
+        std::string pattern = "E8 ?? ?? ?? ?? 84 C0 48 ?? ?? ?? ?? ?? ?? ?? ?? ?? 0F ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? F6 84 ?? ?? ?? ?? ?? ?? 74 ?? 48 8B ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ??";
         UINT64 address = SearchRangeAddressInModule(hModule, pattern);
         // 调用hook函数
         //  ptr转成str输出显示
-        address = address + 12;
+        address = address + 17;
         // 设置内存可写
         DWORD OldProtect = 0;
         VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
         // adress 赋值两个个字节 0x0F 0x84
         // 输出该地址前两个字节
-        //PrintBuffer((LPVOID)address, 2);
+        // PrintBuffer((void *)address, 2);
         memcpy((LPVOID)address, jzCode, 2);
         VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
-        //PrintBuffer((LPVOID)address, 2);
         return true;
     }
     catch (const std::exception &e)
@@ -168,6 +167,11 @@ bool hookVeify(HMODULE hModule)
 void initLauncherNew(HMODULE hModule)
 {
 
+    bool patchVeify = hookVeifyNew(hModule);
+    HookIATCreateFileW(hModule);
+}
+void initLauncher(HMODULE hModule)
+{
     bool patchVeify = hookVeify(hModule);
     HookIATCreateFileW(hModule);
 }
@@ -189,6 +193,13 @@ FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
         if (hModule != NULL)
         {
             initLauncherNew(hModule);
+        }
+    }
+    else if (strcmp(lpProcName, "QQMain") == 0)
+    {
+        if (hModule != NULL)
+        {
+            initLauncher(hModule);
         }
     }
 
@@ -249,7 +260,7 @@ bool HookAnyFunction64(LPVOID originFuncion, LPVOID lpFunction)
 
 HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 {
-    //MessageBoxW(NULL, lpFileName, L"HookedCreateFileW", MB_OK);
+    // MessageBoxW(NULL, lpFileName, L"HookedCreateFileW", MB_OK);
     if (napcat_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
     {
         lpFileName = napcat_package;
