@@ -2,6 +2,7 @@
 #include <vector>
 #include <psapi.h>
 #include <string>
+#include <atlstr.h>
 
 LPWSTR napcat_package = _wgetenv(L"NAPCAT_PATCH_PACKAGE");
 LPWSTR napcat_load = _wgetenv(L"NAPCAT_LOAD_PATH");
@@ -14,7 +15,7 @@ CreateFileW_t OriginalCreateFileW = NULL;
 
 BYTE OldCode[12] = {0x00};
 BYTE HookCode[12] = {0x48, 0xB8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xFF, 0xE0};
-BYTE jzCode[12] = {0x0F, 0x84};
+BYTE jzCode[] = {0x0F, 0x84};
 
 void HookIATCreateFileW(HMODULE hModule);
 // 辅助函数 去除字符串中的所有空格
@@ -51,6 +52,18 @@ std::vector<uint8_t> ParseHexPattern(const std::string &hexPattern)
         }
     }
     return pattern;
+}
+void PrintBuffer(void *buffer, size_t size)
+{
+    unsigned char *p = (unsigned char *)buffer;
+    std::string hexString;
+    for (size_t i = 0; i < size; i++)
+    {
+        char hexByte[4];
+        sprintf(hexByte, "%02X ", p[i]);
+        hexString += hexByte;
+    }
+    MessageBoxW(NULL, CA2W(hexString.c_str()), L"Buffer Content", MB_OK);
 }
 
 // 支持通配符
@@ -105,17 +118,16 @@ bool hookVeify(HMODULE hModule)
 {
     try
     {
-        std::string pattern = "E8 ?? ?? ?? ?? 84 C0 48 ?? ?? ?? ?? ?? ?? ?? ?? ?? 0F ?? ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? F6 84 ?? ?? ?? ?? ?? ?? 74 ?? 48 8B ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ??";
+        std::string pattern = "E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ??";
         UINT64 address = SearchRangeAddressInModule(hModule, pattern);
         // 调用hook函数
         //  ptr转成str输出显示
-        address = address + 17;
+        address = address + 7;
         // 设置内存可写
         DWORD OldProtect = 0;
         VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
         // adress 赋值两个个字节 0x0F 0x84
         // 输出该地址前两个字节
-        // PrintBuffer((void *)address, 2);
         memcpy((LPVOID)address, jzCode, 2);
         VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
         return true;
@@ -145,7 +157,7 @@ FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
     {
         return NULL;
     }
-    if (strcmp(lpProcName, "QQMain") == 0)
+    if (strcmp(lpProcName, "ExportedContentMain") == 0)
     {
         if (hModule != NULL)
         {
@@ -210,17 +222,10 @@ bool HookAnyFunction64(LPVOID originFuncion, LPVOID lpFunction)
 
 HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
 {
+    MessageBoxW(NULL, lpFileName, L"HookedCreateFileW", MB_OK);
     if (napcat_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
     {
-        // lpFileName = napcat_package;
-        return CreateFileW(
-            napcat_package,
-            GENERIC_READ,
-            FILE_SHARE_READ,
-            NULL,
-            OPEN_EXISTING,
-            dwFlagsAndAttributes,
-            hTemplateFile);
+        lpFileName = napcat_package;
     }
     if (napcat_load && wcsstr(lpFileName, L"loadNapCat.js") != NULL)
     {
