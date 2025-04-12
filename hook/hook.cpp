@@ -97,7 +97,31 @@ uint64_t SearchRangeAddressInModule(HMODULE module, const std::string &hexPatter
 
     return 0;
 }
-
+bool hookVeifyNew(HMODULE hModule)
+{
+    try
+    {
+        std::string pattern = "E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ??";
+        UINT64 address = SearchRangeAddressInModule(hModule, pattern);
+        // 调用hook函数
+        //  ptr转成str输出显示
+        address = address + 12;
+        // 设置内存可写
+        DWORD OldProtect = 0;
+        VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
+        // adress 赋值两个个字节 0x0F 0x84
+        // 输出该地址前两个字节
+        // PrintBuffer((LPVOID)address, 2);
+        memcpy((LPVOID)address, jzCode, 2);
+        VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
+        // PrintBuffer((LPVOID)address, 2);
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        return false;
+    }
+}
 bool hookVeify(HMODULE hModule)
 {
     try
@@ -127,9 +151,14 @@ void initLauncher(HMODULE hModule)
 {
 
     bool patchVeify = hookVeify(hModule);
-    //HookIATCreateFileW(hModule);
+    // HookIATCreateFileW(hModule);
 }
+void initLauncherNew(HMODULE hModule)
+{
 
+    bool patchVeify = hookVeifyNew(hModule);
+    // HookIATCreateFileW(hModule);
+}
 FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 {
     // 判断lpProcName是否为Null是否可读
@@ -142,14 +171,20 @@ FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
     {
         return NULL;
     }
-    if (strcmp(lpProcName, "QQMain") == 0)
+    if (strcmp(lpProcName, "ExportedContentMain") == 0)
+    {
+        if (hModule != NULL)
+        {
+            initLauncherNew(hModule);
+        }
+    }
+    else if (strcmp(lpProcName, "QQMain") == 0)
     {
         if (hModule != NULL)
         {
             initLauncher(hModule);
         }
     }
-
     // system("pause");
     return OriginalGetProcAddress(hModule, lpProcName);
 }
