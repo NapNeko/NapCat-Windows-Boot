@@ -209,7 +209,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     std::wstring realMainPath = getFullPath(L"LiteLoader_Launcher.js");
     addEnv(L"LAUNCHER_PATCH_PACKAGE_REAL_MAIN", realMainPath);
 
-    std::wstring LLLoadPath = getFullPath(L"LL\\src\\init.js");
+    std::wstring LLLoadPath = getFullPath(L"LL\\");
     std::replace(LLLoadPath.begin(), LLLoadPath.end(), L'\\', L'/');
     writeScriptToFile(realMainPath, L"require(`" + LLLoadPath + L"`);");
 
