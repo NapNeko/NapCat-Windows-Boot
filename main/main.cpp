@@ -177,45 +177,8 @@ void writeScriptToFile(const std::wstring& filePath, const std::wstring& script)
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
     initEnv();
-    system("chcp 65001");
-
-    auto [QQInstalled, QQPath] = getQQInstalledW();
-    if (!QQInstalled)
-    {
-        MessageBoxW(NULL, L"请先安装QQ", L"错误", MB_ICONERROR);
-        return 1;
-    }
-
-    WIN32_FIND_DATAW FindFileData;
-    HANDLE hFind = FindFirstFileW(L"LL", &FindFileData);
-    if (hFind == INVALID_HANDLE_VALUE)
-    {
-        hFind = FindFirstFileW(L"LiteLoader", &FindFileData);
-        if (hFind == INVALID_HANDLE_VALUE)
-        {
-            MessageBoxW(NULL, L"请将LL或LiteLoader文件夹放置在当前目录", L"错误", MB_ICONERROR);
-            return 1;
-        }
-    }
-
-    std::wstring LLPath = getFullPath(FindFileData.cFileName);
-    std::wcout << L"LLPath:" << LLPath << std::endl;
-
-    std::wstring QQFuckPackage = getFullPath(L"qqnt.json");
-    addEnv(L"LAUNCHER_PACKAGE_PATCH", QQFuckPackage);
-    addEnv(L"LAUNCHER_PATCH_PACKAGE_ONCE", L"1");
-    addEnv(L"LAUNCHER_PATCH_PACKAGE_HACK_MAIN", L"\\LiteLoader_Launcher.js");
-
-    std::wstring realMainPath = getFullPath(L"LiteLoader_Launcher.js");
-    addEnv(L"LAUNCHER_PATCH_PACKAGE_REAL_MAIN", realMainPath);
-
-    std::wstring LLLoadPath = getFullPath(L"LL\\");
-    std::replace(LLLoadPath.begin(), LLLoadPath.end(), L'\\', L'/');
-    writeScriptToFile(realMainPath, L"require(`" + LLLoadPath + L"`);");
-
+    std::wstring QQPath = getFullPath(L"QQ.exe");
     std::wstring QQInjectDll = getFullPath(L"NapCatWinBootHook.dll");
-    std::wcout << L"NapCatWinBootHook.dll Path:" << QQInjectDll << std::endl;
-
     CreateSuspendedProcessW(QQPath.c_str(), QQInjectDll.c_str());
     return 0;
 }

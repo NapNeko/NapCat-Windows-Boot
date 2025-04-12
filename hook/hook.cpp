@@ -9,18 +9,11 @@
 BYTE HookCode[12] = {0x48, 0xB8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xFF, 0xE0};
 BYTE jzCode[12] = {0x0F, 0x84};
 
-LPWSTR env_jump_patch_veify = _wgetenv(L"LAUNCHER_JUMP_VEIFY_PATCH");
 LPWSTR env_patch_package = _wgetenv(L"LAUNCHER_PACKAGE_PATCH");
-LPWSTR env_patch_package_hack_main = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_HACK_MAIN");
-LPWSTR env_patch_package_real_main = _wgetenv(L"LAUNCHER_PATCH_PACKAGE_REAL_MAIN");
 
-typedef HANDLE(WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
 typedef FARPROC(WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
 
 GetProcAddress_t OriginalGetProcAddress = NULL;
-CreateFileW_t OriginalCreateFileW = NULL;
-
-void HookIATCreateFileW(HMODULE hModule);
 
 // 辅助函数 去除字符串中的所有空格
 std::string RemoveSpaces(const std::string &input)
@@ -161,23 +154,11 @@ void initLauncher(HMODULE hModule)
 {
 
     bool patchVeify = hookVeify(hModule);
-    std::cout << "patchVeify: " << patchVeify << std::endl;
-
-    if (env_patch_package != NULL)
-    {
-        HookIATCreateFileW(hModule);
-    }
 }
 void initLauncherNew(HMODULE hModule)
 {
 
     bool patchVeify = hookVeifyNew(hModule);
-    std::cout << "patchVeify: " << patchVeify << std::endl;
-
-    if (env_patch_package != NULL)
-    {
-        HookIATCreateFileW(hModule);
-    }
 }
 
 FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
@@ -207,40 +188,7 @@ FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
         }
     }
 
-    // system("pause");
     return OriginalGetProcAddress(hModule, lpProcName);
-}
-
-HANDLE WINAPI HookedCreateFileW(
-    LPCWSTR lpFileName,
-    DWORD dwDesiredAccess,
-    DWORD dwShareMode,
-    LPSECURITY_ATTRIBUTES lpSecurityAttributes,
-    DWORD dwCreationDisposition,
-    DWORD dwFlagsAndAttributes,
-    HANDLE hTemplateFile)
-{
-    // std::wcout << L"Hooked CreateFileW: " << lpFileName << std::endl;
-
-    if (env_patch_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
-    {
-
-        lpFileName = env_patch_package;
-        return CreateFileW(
-            lpFileName,
-            GENERIC_READ,
-            FILE_SHARE_READ,
-            NULL,
-            OPEN_EXISTING,
-            dwFlagsAndAttributes,
-            hTemplateFile);
-        // return OriginalCreateFileW(lpFileName, GENERIC_READ, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
-    }
-    if (env_patch_package_hack_main && env_patch_package_real_main && wcsstr(lpFileName, env_patch_package_hack_main) != NULL)
-    {
-        lpFileName = env_patch_package_real_main;
-    }
-    return OriginalCreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
 }
 void HookIATMainGetProcAddress()
 {
@@ -263,36 +211,6 @@ void HookIATMainGetProcAddress()
                     VirtualProtect(ppfn, sizeof(PROC), PAGE_EXECUTE_READWRITE, &oldProtect);
                     OriginalGetProcAddress = (GetProcAddress_t)*ppfn;
                     *ppfn = (PROC)HookedGetProcAddress;
-                    VirtualProtect(ppfn, sizeof(PROC), oldProtect, &oldProtect);
-                    break;
-                }
-                pThunk++;
-            }
-            break;
-        }
-        pImportDesc++;
-    }
-}
-void HookIATCreateFileW(HMODULE hModule)
-{
-    PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
-    PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)((BYTE *)hModule + pDosHeader->e_lfanew);
-    PIMAGE_IMPORT_DESCRIPTOR pImportDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE *)hModule + pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
-    while (pImportDesc->Name)
-    {
-        LPCSTR pszModName = (LPCSTR)((BYTE *)hModule + pImportDesc->Name);
-        if (_stricmp(pszModName, "kernel32.dll") == 0)
-        {
-            PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((BYTE *)hModule + pImportDesc->FirstThunk);
-            while (pThunk->u1.Function)
-            {
-                PROC *ppfn = (PROC *)&pThunk->u1.Function;
-                if (*ppfn == (PROC)GetProcAddress(GetModuleHandleA("kernel32.dll"), "CreateFileW"))
-                {
-                    DWORD oldProtect;
-                    VirtualProtect(ppfn, sizeof(PROC), PAGE_EXECUTE_READWRITE, &oldProtect);
-                    OriginalCreateFileW = (CreateFileW_t)*ppfn;
-                    *ppfn = (PROC)HookedCreateFileW;
                     VirtualProtect(ppfn, sizeof(PROC), oldProtect, &oldProtect);
                     break;
                 }
