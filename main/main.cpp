@@ -31,7 +31,6 @@ DWORD WINAPI ReadPipeThread(LPVOID lpParam)
 
     return 0;
 }
-
 std::wstring createBootCommand(std::wstring processName, std::wstring qucikLogin)
 {
     std::wstring processNameInternal = L"\"" + processName + L"\"";
@@ -189,27 +188,6 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
         TerminateProcess(pi.hProcess, 0);
     }
 }
-bool IsUserAnAdmin()
-{
-    BOOL fIsRunAsAdmin = FALSE;
-    DWORD dwError = ERROR_SUCCESS;
-    PSID pAdministratorsGroup = NULL;
-    SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
-    if (!AllocateAndInitializeSid(&NtAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &pAdministratorsGroup))
-    {
-        dwError = GetLastError();
-    }
-    else
-    {
-        if (!CheckTokenMembership(NULL, pAdministratorsGroup, &fIsRunAsAdmin))
-        {
-            dwError = GetLastError();
-        }
-        FreeSid(pAdministratorsGroup);
-    }
-    return fIsRunAsAdmin;
-}
-
 void signalHandler(int signum)
 {
     // 先标记读取线程应该结束
@@ -239,7 +217,6 @@ void signalHandler(int signum)
 
     exit(signum);
 }
-
 std::wstring AnsiToUtf16(const std::string &str)
 {
     int size_needed = MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.size(), NULL, 0);
@@ -247,7 +224,6 @@ std::wstring AnsiToUtf16(const std::string &str)
     MultiByteToWideChar(CP_ACP, 0, str.c_str(), (int)str.size(), &wstrTo[0], size_needed);
     return wstrTo;
 }
-
 int main(int argc, char *argv[])
 {
     signal(SIGTERM, signalHandler);
