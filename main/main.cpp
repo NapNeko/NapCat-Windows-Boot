@@ -173,7 +173,20 @@ void writeScriptToFile(const std::wstring& filePath, const std::wstring& script)
         std::wcerr << L"Failed to open file " << filePath << std::endl;
     }
 }
-
+std::wstring createBootCommand(std::wstring processName, std::wstring qucikLogin)
+{
+    std::wstring processNameInternal = L"\"" + processName + L"\"";
+    std::wstring commandLine = L"--enable-logging";
+    std::wstring realProcessName = processNameInternal;
+    realProcessName += L" ";
+    realProcessName += commandLine;
+    if (qucikLogin.length() > 0)
+    {
+        realProcessName += L" -q ";
+        realProcessName += qucikLogin;
+    }
+    return realProcessName;
+}
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
     initEnv();
@@ -215,7 +228,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
     std::wstring QQInjectDll = getFullPath(L"NapCatWinBootHook.dll");
     std::wcout << L"NapCatWinBootHook.dll Path:" << QQInjectDll << std::endl;
-
-    CreateSuspendedProcessW(QQPath.c_str(), QQInjectDll.c_str());
+    CreateSuspendedProcessW(createBootCommand(QQPath, L"").c_str(), QQInjectDll.c_str());
     return 0;
 }
