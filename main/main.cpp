@@ -116,21 +116,17 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
         [](LPVOID param) -> DWORD
         {
             HANDLE pipe = (HANDLE)param;
-            std::wcout << L"[NapCat Backend] Waiting for pipe connection..." << std::endl;
+            //std::wcout << L"[NapCat Backend] Waiting for pipe connection..." << std::endl;
 
             if (ConnectNamedPipe(pipe, NULL) || GetLastError() == ERROR_PIPE_CONNECTED)
             {
-                std::wcout << L"[NapCat Backend] Pipe connected successfully" << std::endl;
+                //std::wcout << L"[NapCat Backend] Pipe connected successfully" << std::endl;
 
                 // 创建读取线程
                 ReadThread = CreateThread(NULL, 0, ReadPipeThread, pipe, 0, NULL);
                 if (ReadThread == NULL)
                 {
                     std::wcout << L"Failed to create read thread: " << GetLastError() << std::endl;
-                }
-                else
-                {
-                    std::wcout << L"[NapCat Backend] Read thread started" << std::endl;
                 }
             }
             else
