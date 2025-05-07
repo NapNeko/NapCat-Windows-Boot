@@ -8,28 +8,46 @@ HANDLE MainProcessHandle = NULL;
 HANDLE PipeHandle = NULL;
 HANDLE ReadThread = NULL;
 bool ShouldTerminate = false;
+#define PIPE_BUFFER_SIZE 65535
 
 DWORD WINAPI ReadPipeThread(LPVOID lpParam)
 {
     HANDLE hPipe = (HANDLE)lpParam;
-    char buffer[4096];
+    char buffer[PIPE_BUFFER_SIZE];
     DWORD bytesRead;
 
     while (!ShouldTerminate)
     {
-        if (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0)
+        BOOL readResult = ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL);
+        DWORD lastError = GetLastError();
+
+        if (readResult && bytesRead > 0)
         {
+            // 成功读取数据
             buffer[bytesRead] = '\0';
             std::cout << buffer << std::flush;
         }
-        else if (GetLastError() != ERROR_MORE_DATA)
+        else if (!readResult && lastError == ERROR_MORE_DATA)
         {
+            // 有更多数据等待读取，处理当前读取的数据片段
+            buffer[bytesRead] = '\0';
+            std::cout << buffer << std::flush;
+            // 不退出循环，继续读取剩余数据
+        }
+        else if (!readResult && lastError != ERROR_MORE_DATA)
+        {
+            // 读取出错
+            if (lastError != ERROR_BROKEN_PIPE)
+            {
+                std::cerr << "管道读取错误: " << lastError << std::endl;
+            }
             break;
         }
     }
 
     return 0;
 }
+
 
 std::wstring createBootCommand(const std::wstring &processName, const std::wstring &quickLogin)
 {
@@ -93,8 +111,8 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
             PIPE_READMODE_MESSAGE | // 消息读取模式
             PIPE_WAIT,              // 阻塞模式
         PIPE_UNLIMITED_INSTANCES,   // 最大实例数
-        1024,                       // 输出缓冲区大小
-        1024,                       // 输入缓冲区大小
+        PIPE_BUFFER_SIZE,                       // 输出缓冲区大小
+        PIPE_BUFFER_SIZE,                       // 输入缓冲区大小
         0,                          // 客户端超时
         NULL                        // 默认安全属性
     );
