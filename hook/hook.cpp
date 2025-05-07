@@ -53,19 +53,6 @@ std::vector<uint8_t> ParseHexPattern(const std::string &hexPattern)
     }
     return pattern;
 }
-void PrintBuffer(void *buffer, size_t size)
-{
-    unsigned char *p = (unsigned char *)buffer;
-    std::string hexString;
-    for (size_t i = 0; i < size; i++)
-    {
-        char hexByte[4];
-        sprintf(hexByte, "%02X ", p[i]);
-        hexString += hexByte;
-    }
-    MessageBoxW(NULL, CA2W(hexString.c_str()), L"Buffer Content", MB_OK);
-}
-
 // 支持通配符
 bool MatchPatternWithWildcard(const uint8_t *data, const std::vector<uint8_t> &pattern)
 {
@@ -134,7 +121,7 @@ bool hookVeifyNew(HMODULE hModule)
         // PrintBuffer((LPVOID)address, 2);
         return true;
     }
-    catch (const std::exception &e)
+    catch (const std::exception &)
     {
         return false;
     }
@@ -158,7 +145,7 @@ bool hookVeify(HMODULE hModule)
         VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
         return true;
     }
-    catch (const std::exception &e)
+    catch (const std::exception &)
     {
         return false;
     }
