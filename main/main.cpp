@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#define PIPE_BUFFER_SIZE 65536  // 64KB
+#define PIPE_BUFFER_SIZE 65536 // 64KB
 HANDLE MainProcessHandle = NULL;
 HANDLE PipeHandle = NULL;
 HANDLE ReadThread = NULL;
@@ -21,7 +21,7 @@ DWORD WINAPI ReadPipeThread(LPVOID lpParam)
     {
         BOOL readResult = ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, NULL);
         DWORD lastError = GetLastError();
-        
+
         if (readResult && bytesRead > 0)
         {
             // 成功读取数据
@@ -113,8 +113,8 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
             PIPE_READMODE_MESSAGE | // 消息读取模式
             PIPE_WAIT,              // 阻塞模式
         PIPE_UNLIMITED_INSTANCES,   // 最大实例数
-        PIPE_BUFFER_SIZE,                       // 输出缓冲区大小
-        PIPE_BUFFER_SIZE,                       // 输入缓冲区大小
+        PIPE_BUFFER_SIZE,           // 输出缓冲区大小
+        PIPE_BUFFER_SIZE,           // 输入缓冲区大小
         0,                          // 客户端超时
         NULL                        // 默认安全属性
     );
@@ -139,7 +139,7 @@ void CreateSuspendedProcessW(const wchar_t *processName, const wchar_t *dllPath)
 
             if (ConnectNamedPipe(pipe, NULL) || GetLastError() == ERROR_PIPE_CONNECTED)
             {
-                //std::wcout << L"[NapCat Backend] Pipe connected successfully" << std::endl;
+                // std::wcout << L"[NapCat Backend] Pipe connected successfully" << std::endl;
 
                 // 创建读取线程
                 ReadThread = CreateThread(NULL, 0, ReadPipeThread, pipe, 0, NULL);
