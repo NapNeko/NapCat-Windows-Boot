@@ -126,10 +126,10 @@ bool hookVeifyNew(HMODULE hModule)
         VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
         // adress 赋值两个个字节 0x0F 0x84
         // 输出该地址前两个字节
-        PrintBuffer((LPVOID)address, 2);
+        //PrintBuffer((LPVOID)address, 2);
         memcpy((LPVOID)address, xorEax, 2);
         VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
-        PrintBuffer((LPVOID)address, 2);
+        //PrintBuffer((LPVOID)address, 2);
         return true;
     }
     catch (const std::exception &e)
