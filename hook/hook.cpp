@@ -4,11 +4,11 @@
 #include <vector>
 #include <string>
 #include <Psapi.h>
-
+#include <atlstr.h>
 #pragma comment(lib, "dbghelp.lib")
 BYTE HookCode[12] = {0x48, 0xB8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xFF, 0xE0};
 BYTE jzCode[12] = {0x0F, 0x84};
-
+BYTE xorEax[2] = {0xb0, 0x01};
 LPWSTR env_patch_package = _wgetenv(L"LAUNCHER_PACKAGE_PATCH");
 
 typedef FARPROC(WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
@@ -28,6 +28,18 @@ std::string RemoveSpaces(const std::string &input)
         }
     }
     return result;
+}
+void PrintBuffer(void *buffer, size_t size)
+{
+    unsigned char *p = (unsigned char *)buffer;
+    std::string hexString;
+    for (size_t i = 0; i < size; i++)
+    {
+        char hexByte[4];
+        sprintf(hexByte, "%02X ", p[i]);
+        hexString += hexByte;
+    }
+    MessageBoxW(NULL, CA2W(hexString.c_str()), L"Buffer Content", MB_OK);
 }
 
 // 辅助函数 将十六进制字符串转换为字节模式
@@ -104,20 +116,20 @@ bool hookVeifyNew(HMODULE hModule)
 {
     try
     {
-        std::string pattern = "E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ??";
+        std::string pattern = "48 3B 0D ?? ?? ?? ?? 74 06 E8 ?? ?? ?? ?? CC 89 E8 0F 28 B4 24 F0 03 00 00";
         UINT64 address = SearchRangeAddressInModule(hModule, pattern);
         // 调用hook函数
         //  ptr转成str输出显示
-        address = address + 12;
+        address = address + 15;
         // 设置内存可写
         DWORD OldProtect = 0;
         VirtualProtect((LPVOID)address, 2, PAGE_EXECUTE_READWRITE, &OldProtect);
         // adress 赋值两个个字节 0x0F 0x84
         // 输出该地址前两个字节
-        // PrintBuffer((LPVOID)address, 2);
-        memcpy((LPVOID)address, jzCode, 2);
+        PrintBuffer((LPVOID)address, 2);
+        memcpy((LPVOID)address, xorEax, 2);
         VirtualProtect((LPVOID)address, 2, OldProtect, &OldProtect);
-        // PrintBuffer((LPVOID)address, 2);
+        PrintBuffer((LPVOID)address, 2);
         return true;
     }
     catch (const std::exception &e)
