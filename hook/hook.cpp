@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <Windows.h>
 #include <vector>
 #include <psapi.h>
@@ -9,15 +10,18 @@ LPWSTR napcat_load = _wgetenv(L"NAPCAT_LOAD_PATH");
 
 typedef HANDLE(WINAPI *CreateFileW_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
 typedef FARPROC(WINAPI *GetProcAddress_t)(HMODULE, LPCSTR);
+typedef BOOL(WINAPI *GetFileInformationByName_t)(PCWSTR, FILE_INFO_BY_NAME_CLASS, PVOID, ULONG);
 
 GetProcAddress_t OriginalGetProcAddress = NULL;
 CreateFileW_t OriginalCreateFileW = NULL;
+GetFileInformationByName_t OriginalGetFileInformationByName = NULL;
 
 BYTE OldCode[12] = {0x00};
 BYTE HookCode[12] = {0x48, 0xB8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xFF, 0xE0};
 BYTE jzCode[] = {0x0F, 0x84};
 
 void HookIATCreateFileW(HMODULE hModule);
+void HookIATGetFileInformationByName(HMODULE hModule);
 // 辅助函数 去除字符串中的所有空格
 std::string RemoveSpaces(const std::string &input)
 {
@@ -250,6 +254,7 @@ HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD
     // MessageBoxW(NULL, lpFileName, L"HookedCreateFileW", MB_OK);
     if (napcat_package && wcsstr(lpFileName, L"resources\\app\\package.json") != NULL)
     {
+        // MessageBoxW(NULL, lpFileName, L"HookedCreateFileWed", MB_OK);
         lpFileName = napcat_package;
     }
     if (napcat_load && wcsstr(lpFileName, L"loadNapCat.js") != NULL)
@@ -257,6 +262,52 @@ HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD
         lpFileName = napcat_load;
     }
     return CreateFileW(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+}
+
+BOOL WINAPI HookedGetFileInformationByName(PCWSTR FileName, FILE_INFO_BY_NAME_CLASS FileInformationClass, PVOID FileInfoBuffer, ULONG FileInfoBufferSize)
+{
+    // 如果是检查 loadNapCat.js 并且设置了环境变量,重定向到实际文件
+    PCWSTR actualFileName = FileName;
+    if (napcat_load && wcsstr(FileName, L"loadNapCat.js") != NULL)
+    {
+        actualFileName = napcat_load;
+    }
+
+    // 使用 CreateFileW + GetFileInformationByHandleEx 来模拟 GetFileInformationByName
+    HANDLE hFile = CreateFileW(
+        actualFileName,
+        FILE_READ_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+        NULL);
+
+    if (hFile == INVALID_HANDLE_VALUE)
+    {
+        return FALSE;
+    }
+
+    // 直接使用 GetFileInformationByHandleEx，让系统处理不同的 FileInformationClass
+    BOOL result = GetFileInformationByHandleEx(hFile, (FILE_INFO_BY_HANDLE_CLASS)FileInformationClass, FileInfoBuffer, FileInfoBufferSize);
+
+    CloseHandle(hFile);
+    return result;
+}
+
+void HookGetFileInformationByNameDirectly()
+{
+    // 直接使用 inline hook GetFileInformationByName API 函数本身
+    HMODULE hKernelBase = GetModuleHandleA("kernelbase.dll");
+    if (hKernelBase)
+    {
+        PROC pGetFileInformationByName = GetProcAddress(hKernelBase, "GetFileInformationByName");
+        if (pGetFileInformationByName)
+        {
+            OriginalGetFileInformationByName = (GetFileInformationByName_t)pGetFileInformationByName;
+            HookAnyFunction64((LPVOID)pGetFileInformationByName, (LPVOID)HookedGetFileInformationByName);
+        }
+    }
 }
 
 void HookIATCreateFileW(HMODULE hModule)
@@ -295,6 +346,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
+        HookGetFileInformationByNameDirectly();
         HookIATMainGetProcAddress();
         break;
     case DLL_THREAD_ATTACH:
