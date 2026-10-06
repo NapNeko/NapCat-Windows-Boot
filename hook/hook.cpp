@@ -16,12 +16,12 @@ GetProcAddress_t OriginalGetProcAddress = NULL;
 CreateFileW_t OriginalCreateFileW = NULL;
 GetFileInformationByName_t OriginalGetFileInformationByName = NULL;
 
-BYTE OldCode[12] = {0x00};
-BYTE HookCode[12] = {0x48, 0xB8, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0xFF, 0xE0};
 BYTE jzCode[] = {0x0F, 0x84};
 
 void HookIATCreateFileW(HMODULE hModule);
 void HookIATGetFileInformationByName(HMODULE hModule);
+void HookIATGetProcAddress(HMODULE hModule);
+BOOL WINAPI HookedGetFileInformationByName(PCWSTR, FILE_INFO_BY_NAME_CLASS, PVOID, ULONG);
 // 辅助函数 去除字符串中的所有空格
 std::string RemoveSpaces(const std::string &input)
 {
@@ -160,24 +160,28 @@ void initLauncherNew(HMODULE hModule)
 
     bool patchVeify = hookVeifyNew(hModule);
     HookIATCreateFileW(hModule);
+    HookIATGetProcAddress(hModule);
+    HookIATGetFileInformationByName(hModule);
 }
 void initLauncher(HMODULE hModule)
 {
     bool patchVeify = hookVeify(hModule);
     HookIATCreateFileW(hModule);
+    HookIATGetProcAddress(hModule);
+    HookIATGetFileInformationByName(hModule);
 }
 
 FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 {
-    // 判断lpProcName是否为Null是否可读
-    if (IsBadReadPtr(lpProcName, 1))
+    FARPROC original = OriginalGetProcAddress(hModule, lpProcName);
+    if (reinterpret_cast<ULONG_PTR>(lpProcName) <= 0xffff || original == NULL)
     {
-        return NULL;
+        return original;
     }
-    // 判断lpProcName是否为Null
-    if (lpProcName == NULL)
+    if (OriginalGetFileInformationByName &&
+        original == reinterpret_cast<FARPROC>(OriginalGetFileInformationByName))
     {
-        return NULL;
+        return reinterpret_cast<FARPROC>(HookedGetFileInformationByName);
     }
     if (strcmp(lpProcName, "ExportedContentMain") == 0)
     {
@@ -195,58 +199,45 @@ FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
     }
 
     // system("pause");
-    return OriginalGetProcAddress(hModule, lpProcName);
+    return original;
 }
 
-void HookIATMainGetProcAddress()
+void HookImport(HMODULE module, PROC original, PROC replacement)
 {
-    // AllocConsole();
-    // freopen("CONOUT$", "w", stdout);
-    // std::wcout << env_patch_package_hack_main << std::endl;
-    // std::wcout << env_patch_package_real_main << std::endl;
-    // std::wcout << env_patch_package << std::endl;
-    HMODULE hModule = GetModuleHandle(NULL);
-    PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)hModule;
-    PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)((BYTE *)hModule + pDosHeader->e_lfanew);
-    PIMAGE_IMPORT_DESCRIPTOR pImportDesc = (PIMAGE_IMPORT_DESCRIPTOR)((BYTE *)hModule + pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
-    while (pImportDesc->Name)
+    if (!module || !original)
+        return;
+    auto base = reinterpret_cast<BYTE *>(module);
+    auto dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(base);
+    auto ntHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>(base + dosHeader->e_lfanew);
+    auto directory = ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (!directory.VirtualAddress || !directory.Size)
+        return;
+    auto importDescriptor = reinterpret_cast<PIMAGE_IMPORT_DESCRIPTOR>(base + directory.VirtualAddress);
+    for (; importDescriptor->Name; ++importDescriptor)
     {
-        LPCSTR pszModName = (LPCSTR)((BYTE *)hModule + pImportDesc->Name);
-        if (_stricmp(pszModName, "kernel32.dll") == 0)
+        auto thunk = reinterpret_cast<PIMAGE_THUNK_DATA>(base + importDescriptor->FirstThunk);
+        for (; thunk->u1.Function; ++thunk)
         {
-            PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((BYTE *)hModule + pImportDesc->FirstThunk);
-            while (pThunk->u1.Function)
+            auto entry = reinterpret_cast<PROC *>(&thunk->u1.Function);
+            if (*entry == original)
             {
-                PROC *ppfn = (PROC *)&pThunk->u1.Function;
-                if (*ppfn == (PROC)GetProcAddress(GetModuleHandleA("kernel32.dll"), "GetProcAddress"))
+                DWORD oldProtect;
+                if (!VirtualProtect(entry, sizeof(PROC), PAGE_READWRITE, &oldProtect))
                 {
-                    DWORD oldProtect;
-                    VirtualProtect(ppfn, sizeof(PROC), PAGE_EXECUTE_READWRITE, &oldProtect);
-                    OriginalGetProcAddress = (GetProcAddress_t)*ppfn;
-                    *ppfn = (PROC)HookedGetProcAddress;
-                    VirtualProtect(ppfn, sizeof(PROC), oldProtect, &oldProtect);
-                    break;
+                    OutputDebugStringW(L"[NapCat Hook] Failed to make import entry writable.\n");
+                    continue;
                 }
-                pThunk++;
+                InterlockedExchangePointer(reinterpret_cast<PVOID volatile *>(entry), reinterpret_cast<PVOID>(replacement));
+                if (!VirtualProtect(entry, sizeof(PROC), oldProtect, &oldProtect))
+                    OutputDebugStringW(L"[NapCat Hook] Failed to restore import entry protection.\n");
             }
-            break;
         }
-        pImportDesc++;
     }
 }
 
-bool HookAnyFunction64(LPVOID originFuncion, LPVOID lpFunction)
+void HookIATGetProcAddress(HMODULE hModule)
 {
-    DWORD_PTR FuncAddress = (UINT64)originFuncion;
-    DWORD OldProtect = 0;
-    if (VirtualProtect((LPVOID)FuncAddress, 12, PAGE_EXECUTE_READWRITE, &OldProtect))
-    {
-        memcpy(OldCode, (LPVOID)FuncAddress, 12);     // 拷贝原始机器码指令
-        *(PINT64)(HookCode + 2) = (UINT64)lpFunction; // 填充90为指定跳转地址
-    }
-    memcpy((LPVOID)FuncAddress, &HookCode, sizeof(HookCode)); // 拷贝Hook机器指令
-    VirtualProtect((LPVOID)FuncAddress, 12, OldProtect, &OldProtect);
-    return true;
+    HookImport(hModule, reinterpret_cast<PROC>(OriginalGetProcAddress), reinterpret_cast<PROC>(HookedGetProcAddress));
 }
 
 HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile)
@@ -266,48 +257,22 @@ HANDLE WINAPI HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD
 
 BOOL WINAPI HookedGetFileInformationByName(PCWSTR FileName, FILE_INFO_BY_NAME_CLASS FileInformationClass, PVOID FileInfoBuffer, ULONG FileInfoBufferSize)
 {
-    // 如果是检查 loadNapCat.js 并且设置了环境变量,重定向到实际文件
     PCWSTR actualFileName = FileName;
-    if (napcat_load && wcsstr(FileName, L"loadNapCat.js") != NULL)
+    if (FileName && napcat_package && wcsstr(FileName, L"resources\\app\\package.json") != NULL)
+    {
+        actualFileName = napcat_package;
+    }
+    if (FileName && napcat_load && wcsstr(FileName, L"loadNapCat.js") != NULL)
     {
         actualFileName = napcat_load;
     }
 
-    // 使用 CreateFileW + GetFileInformationByHandleEx 来模拟 GetFileInformationByName
-    HANDLE hFile = CreateFileW(
-        actualFileName,
-        FILE_READ_ATTRIBUTES,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        NULL,
-        OPEN_EXISTING,
-        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
-        NULL);
-
-    if (hFile == INVALID_HANDLE_VALUE)
-    {
-        return FALSE;
-    }
-
-    // 直接使用 GetFileInformationByHandleEx，让系统处理不同的 FileInformationClass
-    BOOL result = GetFileInformationByHandleEx(hFile, (FILE_INFO_BY_HANDLE_CLASS)FileInformationClass, FileInfoBuffer, FileInfoBufferSize);
-
-    CloseHandle(hFile);
-    return result;
+    return OriginalGetFileInformationByName(actualFileName, FileInformationClass, FileInfoBuffer, FileInfoBufferSize);
 }
 
-void HookGetFileInformationByNameDirectly()
+void HookIATGetFileInformationByName(HMODULE hModule)
 {
-    // 直接使用 inline hook GetFileInformationByName API 函数本身
-    HMODULE hKernelBase = GetModuleHandleA("kernelbase.dll");
-    if (hKernelBase)
-    {
-        PROC pGetFileInformationByName = GetProcAddress(hKernelBase, "GetFileInformationByName");
-        if (pGetFileInformationByName)
-        {
-            OriginalGetFileInformationByName = (GetFileInformationByName_t)pGetFileInformationByName;
-            HookAnyFunction64((LPVOID)pGetFileInformationByName, (LPVOID)HookedGetFileInformationByName);
-        }
-    }
+    HookImport(hModule, reinterpret_cast<PROC>(OriginalGetFileInformationByName), reinterpret_cast<PROC>(HookedGetFileInformationByName));
 }
 
 void HookIATCreateFileW(HMODULE hModule)
@@ -346,8 +311,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     switch (ul_reason_for_call)
     {
     case DLL_PROCESS_ATTACH:
-        HookGetFileInformationByNameDirectly();
-        HookIATMainGetProcAddress();
+        OriginalGetProcAddress = GetProcAddress;
+        OriginalGetFileInformationByName = reinterpret_cast<GetFileInformationByName_t>(
+            GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "GetFileInformationByName"));
+        HookIATGetProcAddress(GetModuleHandleW(NULL));
+        HookIATGetFileInformationByName(GetModuleHandleW(NULL));
         break;
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
