@@ -15,6 +15,7 @@ typedef BOOL(WINAPI *GetFileInformationByName_t)(PCWSTR, FILE_INFO_BY_NAME_CLASS
 GetProcAddress_t OriginalGetProcAddress = NULL;
 CreateFileW_t OriginalCreateFileW = NULL;
 GetFileInformationByName_t OriginalGetFileInformationByName = NULL;
+GetFileInformationByName_t OriginalKernelBaseGetFileInformationByName = NULL;
 
 BYTE jzCode[] = {0x0F, 0x84};
 
@@ -178,8 +179,8 @@ FARPROC WINAPI HookedGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
     {
         return original;
     }
-    if (OriginalGetFileInformationByName &&
-        original == reinterpret_cast<FARPROC>(OriginalGetFileInformationByName))
+    if (original == reinterpret_cast<FARPROC>(OriginalGetFileInformationByName) ||
+        original == reinterpret_cast<FARPROC>(OriginalKernelBaseGetFileInformationByName))
     {
         return reinterpret_cast<FARPROC>(HookedGetFileInformationByName);
     }
@@ -273,6 +274,7 @@ BOOL WINAPI HookedGetFileInformationByName(PCWSTR FileName, FILE_INFO_BY_NAME_CL
 void HookIATGetFileInformationByName(HMODULE hModule)
 {
     HookImport(hModule, reinterpret_cast<PROC>(OriginalGetFileInformationByName), reinterpret_cast<PROC>(HookedGetFileInformationByName));
+    HookImport(hModule, reinterpret_cast<PROC>(OriginalKernelBaseGetFileInformationByName), reinterpret_cast<PROC>(HookedGetFileInformationByName));
 }
 
 void HookIATCreateFileW(HMODULE hModule)
@@ -314,6 +316,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         OriginalGetProcAddress = GetProcAddress;
         OriginalGetFileInformationByName = reinterpret_cast<GetFileInformationByName_t>(
             GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "GetFileInformationByName"));
+        OriginalKernelBaseGetFileInformationByName = reinterpret_cast<GetFileInformationByName_t>(
+            GetProcAddress(GetModuleHandleW(L"kernelbase.dll"), "GetFileInformationByName"));
+        if (!OriginalGetFileInformationByName)
+            OriginalGetFileInformationByName = OriginalKernelBaseGetFileInformationByName;
         HookIATGetProcAddress(GetModuleHandleW(NULL));
         HookIATGetFileInformationByName(GetModuleHandleW(NULL));
         break;
