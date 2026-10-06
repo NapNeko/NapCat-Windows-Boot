@@ -258,6 +258,10 @@ int main(int argc, char *argv[])
     {
         quickLoginQQ = args[3];
     }
+    else if (argc == 5 && args[3] == L"-q")
+    {
+        quickLoginQQ = args[4];
+    }
     std::wstring bootCommand = createBootCommand(args[1], quickLoginQQ);
     std::wcout << L"Boot Command:" << bootCommand << std::endl;
     CreateSuspendedProcessW(bootCommand.c_str(), args[2].c_str());
